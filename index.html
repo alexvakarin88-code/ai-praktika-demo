@@ -80,7 +80,7 @@ async function addFiles(){
   try{
    const rows=await readUploadedFile(file);
    if(!rows.length)throw new Error('В файле не найдены строки с данными');
-   const title=q('fTitle').value.trim()||file.name.replace(/\\.(csv|xlsx|xls)$/i,'');
+   const title=q('fTitle').value.trim()||file.name.replace(/\.(csv|xlsx|xls)$/i,'');
    uploaded.push({title,description,name:file.name,rows,kind:guess({title,description,rows})});added++;
   }catch(err){notice(file.name+': '+err.message)}
  }
