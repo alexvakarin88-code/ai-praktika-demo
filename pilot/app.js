@@ -92,7 +92,7 @@ function detectReportType(columns){
  return null;
 }
 function firstField(row,names,fallback=""){
- for(const name of names){const value=row?.[name];if(value!==undefined&&value!==null&&String(value).trim()!=="")return value}
+ for(const name of names){const value=row?.[name];const text=String(value??"").trim();if(value!==undefined&&value!==null&&text!==""&&text.toLowerCase()!=="nan")return value}
  return fallback;
 }
 function pointFromSource(source,datasetName=""){
@@ -187,7 +187,8 @@ async function buildCombinedDataset(options={}){
    for(const r of sourceRows){
     if(!r||typeof r!=="object")continue;
     const item=String(firstField(r,["Товар","Позиция продажи","Позиция","Элемент номенклатуры","Блюдо / заготовка"],"")).trim();
-    if(/^итого\b/i.test(item))continue;
+    const rowSku=firstField(r,["Артикул","Артикул товара","Артикул блюда / заготовки"],"");
+    if(/^итого\b/i.test(item)||(!item&&!String(rowSku??"").trim()))continue;
     const sourceName=String(firstField(r,["Исходный файл","Файл"],source)||source||ds.name);
     const point=String(firstField(r,["Точка","Подразделение"],pointFromName)||"Не указано").trim()||"Не указано";
     let type,name,quantity,unit,amount,operation,sku,warehouse="",grossProfit=0,unitPrice=0;
