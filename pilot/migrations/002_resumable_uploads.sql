@@ -58,6 +58,15 @@ set upload_status = 'interrupted',
 where row_count = 0
   and upload_status = 'complete';
 
+-- Also flag any older dataset whose displayed total differs from the rows
+-- actually present in chunk storage (or the legacy inline rows array).
+update public.datasets
+set upload_status = 'interrupted',
+    upload_error = 'Проверка старого набора не совпала с фактическим числом строк. Загрузите исходный файл заново.'
+where row_count > 0
+  and stored_row_count <> row_count
+  and upload_status = 'complete';
+
 create or replace function public.bump_dataset_upload_progress()
 returns trigger
 language plpgsql
