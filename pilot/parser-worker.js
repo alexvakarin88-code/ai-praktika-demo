@@ -1,7 +1,6 @@
 importScripts("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js");
 
-function cellValue(sheet, row, col) {
-  const cell = sheet[XLSX.utils.encode_cell({ r: row, c: col })];
+function cellValueFromCell(cell) {
   if (!cell) return "";
   const value = cell.v;
   if (value instanceof Date) return value.toISOString();
@@ -53,9 +52,12 @@ async function processFile(file) {
   const headerRow = range.s.r;
   const columns = [];
   const seen = Object.create(null);
+  // Precompute Excel column letters once; avoid encoding a cell address for every value.
+  const columnKeys = [];
+  for (let c = range.s.c; c <= range.e.c; c++) columnKeys.push(XLSX.utils.encode_col(c));
 
   for (let c = range.s.c; c <= range.e.c; c++) {
-    let name = String(cellValue(sheet, headerRow, c)).trim() || "Колонка " + (c - range.s.c + 1);
+    let name = String(cellValueFromCell(sheet[columnKeys[c - range.s.c] + (headerRow + 1)])).trim() || "Колонка " + (c - range.s.c + 1);
     seen[name] = (seen[name] || 0) + 1;
     if (seen[name] > 1) name += " (" + seen[name] + ")";
     columns.push(name);
@@ -66,7 +68,7 @@ async function processFile(file) {
     const row = {};
     let hasValue = false;
     for (let i = 0; i < columns.length; i++) {
-      const value = cellValue(sheet, r, range.s.c + i);
+      const value = cellValueFromCell(sheet[columnKeys[i] + (r + 1)]);
       row[columns[i]] = value;
       if (!isBlank(value)) hasValue = true;
     }
@@ -81,8 +83,10 @@ async function processFile(file) {
 
   await sendAndWait({ type: "meta", columns, totalRows, sheetName });
 
-  const maxRows = 500;
-  const maxBytes = 256 * 1024;
+  // Larger batches reduce the number of sequential network round-trips.
+  // Keep a 2 MB payload ceiling for stable uploads on ordinary connections.
+  const maxRows = 2000;
+  const maxBytes = 2 * 1024 * 1024;
   const encoder = new TextEncoder();
   let chunk = [];
   let chunkBytes = 0;
