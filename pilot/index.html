@@ -11,7 +11,7 @@
  <h2>Аналитика закупок</h2>
  <p class="muted">Объединяем закупочные отчёты разных точек, сравниваем объёмы и средние цены по одинаковым артикулам. Это аналитический пример, а не автоматическое формирование заказа.</p>
  <label>Набор данных<select id="analyticsDataset"></select></label>
- <p id="analyticsDatasetHint" class="muted">Сначала загрузите объединённый файл закупок в разделе «Данные».</p>
+ <p id="analyticsDatasetHint" class="muted">Сначала скачайте подготовленный объединённый Excel из переписки и загрузите его один раз в разделе «Данные». Внутри уже объединены 16 полученных отчётов; повторно загружать каждый исходный файл отдельно не нужно.</p>
  <div class="bar" style="justify-content:flex-start"><button id="analyticsBuild" class="primary" type="button">Построить анализ</button><span id="analyticsStatus" class="muted"></span></div>
 </article>
 <div id="analyticsResults">
@@ -39,7 +39,7 @@
   <p class="muted">Позиции, где средняя цена отличается между точками не менее чем на 10%. Это повод проверить фасовку, единицы измерения, поставщика и условия, а не готовый вывод о переплате.</p>
   <div class="table-scroll"><table class="data-preview"><thead><tr><th>Артикул</th><th>Товар</th><th class="num">Точек</th><th class="num">Разница</th><th class="num">Мин. – макс. цена</th></tr></thead><tbody id="analyticsSignals"><tr><td colspan="5">После анализа здесь появятся сигналы.</td></tr></tbody></table></div>
  </article>
- <article class="notice" id="analyticsCoverage">Период и полноту покрытия сети нужно подтвердить. Отчёты закупок не заменяют данные о продажах, расходе и остатках.</article>
+ <article class="notice" id="analyticsCoverage">Период: контрольный подробный файл указывает 01–31.10.2026, но в 16 коротких выгрузках период не прописан — перед управленческими решениями подтвердите одинаковый интервал в iiko. Загружено 16 файлов: 15 точек/подразделений и отдельный файл ПРЦ; тип ПРЦ и полноту покрытия сети из 19 пиццерий нужно подтвердить. Это анализ закупок, не продаж, расхода или остатков.</article>
 </div>
 </section>
 <section id="page-feedback" class="page"><article class="card"><h2>Обратная связь тестировщика</h2><p class="muted">Фиксируйте ошибки, непонятные места, идеи и полезные функции.</p><form id="feedbackForm"><label>Тип сообщения<select id="fbType"><option value="bug">Ошибка / не работает</option><option value="confusing">Непонятно, как пользоваться</option><option value="idea">Предложение</option><option value="positive">Что оказалось полезным</option></select></label><label>Где возник вопрос?<input id="fbPage" placeholder="Например, раздел Задачи"></label><label>Что произошло и что ожидали?<textarea id="fbText" rows="5" required></textarea></label><label>Важность<select id="fbPriority"><option value="normal">Обычная</option><option value="high">Мешает работе</option><option value="low">Можно улучшить позже</option></select></label><button class="primary">Отправить отзыв</button><p id="fbMsg" class="error"></p></form></article><article class="card"><h3>Отзывы команды</h3><div id="feedbackList"></div></article></section>
