@@ -350,7 +350,7 @@ function openTask(id=""){let t=s.tasks.find(x=>x.id===id);$("taskForm").reset();
   msg.textContent="Готово. База подтвердила сохранение всех "+m.totalRows+" строк.";
   if(btn)btn.disabled=false;
   try{await log("Загружен набор данных",f.name+" · "+m.totalRows+" строк")}catch(logError){console.warn(logError)}
-  try{await refresh()}catch(refreshError){console.warn(refreshError);toast("Данные сохранены, но список не обновился. Нажмите «Обновить».")}
+  try{await refresh();const uploaded=s.datasets.find(x=>x.id===datasetId);if(uploaded?.columns?.includes("Точка / подразделение")&&uploaded?.columns?.includes("Артикул товара")){page("analytics");renderAnalyticsOptions();$("analyticsDataset").value=datasetId;await buildPurchaseAnalytics()}}catch(refreshError){console.warn(refreshError);toast("Данные сохранены, но список не обновился. Нажмите «Обновить».")}
  };
  try{
   worker=new Worker("parser-worker.js");
