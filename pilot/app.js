@@ -26,26 +26,40 @@ const transientError=err=>{
   /failed to fetch|network|timeout|temporar|connection|load failed/i.test(message) ||
   err?.status===429 || Number(err?.status)>=500;
 };
+const renewAuth=async()=>{
+ msg.textContent="Обновляю авторизацию для продолжения загрузки…";
+ const result=await s.db.auth.refreshSession();
+ if(result.error||!result.data?.session)throw new Error(
+   "Сессия истекла и не обновилась. Войдите заново, прежде чем загружать файл."
+ );
+};
+const isExpired=err=>/jwt expired|token.*expired|invalid jwt/i.test(String(err?.message||err||""));
 const saveChunk=async payload=>{
  let lastError=null;
  for(let attempt=0;attempt<5;attempt++){
   try{
+   // Prevent expiry during long-running imports even when auto-refresh is delayed.
+   const {data:sessionData,error:sessionError}=await s.db.auth.getSession();
+   if(sessionError||!sessionData?.session)await renewAuth();
+   else if(sessionData.session.expires_at && sessionData.session.expires_at*1000<Date.now()+120000)await renewAuth();
    const result=await s.db.from("dataset_rows").insert(payload);
    if(!result.error)return;
    if(result.error.code==="23505")return;
    lastError=result.error;
-   if(!transientError(result.error))throw result.error;
+   if(isExpired(lastError)){await renewAuth();continue}
+   if(!transientError(lastError))throw lastError;
   }catch(error){
    if(error?.code==="23505")return;
    lastError=error;
+   if(isExpired(error)){await renewAuth();continue}
    if(!transientError(error))throw error;
   }
   if(attempt<4){
-   msg.textContent="Связь прервалась. Повторяю отправку части "+(payload.chunk_index+1)+" ("+(attempt+2)+"/5)…";
+   msg.textContent="Повторяю отправку пакета "+(payload.chunk_index+1)+" ("+(attempt+2)+"/5)…";
    await new Promise(resolve=>setTimeout(resolve,Math.min(800*Math.pow(2,attempt),8000)));
   }
  }
- throw lastError||new Error("Не удалось передать часть файла после нескольких попыток.");
+ throw lastError||new Error("Не удалось сохранить очередной пакет.");
 };
 try{
  worker=new Worker("parser-worker.js");
