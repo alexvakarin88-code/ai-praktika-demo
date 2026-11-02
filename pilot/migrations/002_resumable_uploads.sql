@@ -50,6 +50,14 @@ set stored_row_count = greatest(
 )
 where stored_row_count = 0;
 
+-- Old uploader left some dataset records at row_count = 0 when it failed
+-- before finalization. Make those records visibly incomplete, not successful.
+update public.datasets
+set upload_status = 'interrupted',
+    upload_error = 'Предыдущая загрузка не завершилась. Повторите её как новую загрузку.'
+where row_count = 0
+  and upload_status = 'complete';
+
 create or replace function public.bump_dataset_upload_progress()
 returns trigger
 language plpgsql
