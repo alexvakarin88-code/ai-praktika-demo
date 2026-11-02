@@ -1,7 +1,7 @@
 (()=>{const c=window.APP_CONFIG||{},$=id=>document.getElementById(id),s={db:null,user:null,role:null,wid:null,tasks:[],datasets:[],feedback:[],history:[],filter:"all",schemaReady:false,resumeDatasetId:null};const labels={open:"Новая",progress:"В работе",done:"Решена"},types={bug:"Ошибка",confusing:"Непонятно",idea:"Идея",positive:"Полезно"},esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),date=x=>x?new Date(x).toLocaleString("ru-RU"):"";function toast(t){$("toast").textContent=t;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3000)}function page(p){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+p).classList.add("active");document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===p));$("pageTitle").textContent=({overview:"Обзор",tasks:"Задачи",data:"Данные",feedback:"Обратная связь",history:"История"})[p]}async function log(event,summary){let r=await s.db.from("activity_log").insert({workspace_id:s.wid,actor_id:s.user.id,event_type:event,details:{summary}});if(r.error)console.warn(r.error.message)}async function membership(){let r=await s.db.from("workspace_members").select("workspace_id,role").eq("workspace_id",c.workspaceId).eq("user_id",s.user.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("Для этого аккаунта не выдан доступ. Обратитесь к владельцу пилота.");s.role=r.data.role;s.wid=r.data.workspace_id}function taskCard(t){return '<article class="item"><div class="bar"><b>'+esc(t.title)+'</b><span class="tag '+t.status+'">'+labels[t.status]+'</span></div><p>'+esc(t.description||"Описание не добавлено")+'</p>'+(t.last_comment?'<p><b>Комментарий:</b> '+esc(t.last_comment)+'</p>':'')+'<small>'+date(t.updated_at)+'</small><div class="bar" style="justify-content:flex-start;margin-top:8px"><button class="ghost" data-edit="'+t.id+'">Открыть / изменить</button>'+(s.role==="owner"?'<button class="ghost" data-delete="'+t.id+'">Удалить</button>':'')+'</div></article>'}function historyCard(x){return '<article class="item"><b>'+esc(x.event_type)+'</b><p>'+esc(x.details?.summary||"")+'</p><small>'+date(x.created_at)+'</small></article>'}function datasetCard(x){
  const status=x.upload_status||"complete",done=status==="complete";
  const actual=Number(x.stored_row_count||0),expected=Number(x.row_count||0);
- const statusText=done?"Завершено":status==="uploading"?"Загрузка прервана или ещё выполняется":"Можно продолжить";
+ const statusText=done?"Завершено":x.source_file_hash?"Загрузка прервана — можно продолжить":"Нужна повторная загрузка";
  const countText=done?expected+" строк":actual+" из "+expected+" строк сохранено";
  const resume=(!done&&x.uploaded_by===s.user.id&&x.source_file_hash)?'<button class="ghost" data-resume="'+esc(x.id)+'">Продолжить загрузку</button>':"";
  return '<article class="item"><div class="bar"><b>'+esc(x.name)+'</b><small>'+statusText+'</small></div><p>'+countText+' · '+esc(x.notes||"")+'</p>'+(x.upload_error?'<p class="error">'+esc(x.upload_error)+'</p>':"")+'<small>'+date(x.created_at)+'</small><div style="margin-top:8px">'+resume+'</div></article>';
@@ -45,7 +45,7 @@ function openTask(id=""){let t=s.tasks.find(x=>x.id===id);$("taskForm").reset();
  if(f.size>100*1024*1024){msg.textContent="Файл больше 100 МБ. Для такого объёма потребуется отдельный серверный импорт.";return}
  if(btn)btn.disabled=true;
  msg.textContent="Читаю файл и проверяю его целостность…";
- let worker=null,datasetId=null,finished=false,totalRows=0,actualSavedRows=0,chunkCount=0;
+ let worker=null,datasetId=null,finished=false,totalRows=0,actualSavedRows=0,chunkCount=0,refreshPromise=null;
  const setStatus=async(status,errorText)=>{
   if(!datasetId)return;
   const result=await s.db.from("datasets").update({
@@ -76,7 +76,8 @@ function openTask(id=""){let t=s.tasks.find(x=>x.id===id);$("taskForm").reset();
   return err instanceof TypeError||/failed to fetch|network|timeout|temporar|connection|load failed|gateway/i.test(text)||err?.status===429||Number(err?.status)>=500;
  };
  const refreshAuth=async()=>{
-  const r=await s.db.auth.refreshSession();
+  if(!refreshPromise)refreshPromise=s.db.auth.refreshSession().finally(()=>{refreshPromise=null});
+  const r=await refreshPromise;
   if(r.error||!r.data?.session)throw new Error("Не удалось обновить сессию. Войдите в приложение заново и продолжите загрузку.");
  };
  const saveChunk=async payload=>{
