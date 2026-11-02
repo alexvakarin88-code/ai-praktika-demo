@@ -324,7 +324,7 @@ async function openAnalytics(id){
   if(zeroQtyWithAmount>0)actions.push({level:"Средний",title:"Проверить качество отчёта о порче",text:zeroQtyWithAmount+" строк имеют денежную сумму при нулевом количестве. До проверки не использовать их для расчёта количественных норм."});
   if(missing>0)actions.push({level:"Средний",title:"Дополнить покрытие сети",text:"В данных "+pizzeriaCount+" пиццерий при заявленных 19. Не хватает отчётов ещё по "+missing+" точкам."});
   if(unknownPointRows>0)actions.push({level:"Высокий",title:"Уточнить привязку строк к пиццериям",text:unknownPointRows+" строк не удалось отнести к конкретной точке. Проверьте имена исходных файлов."});
-   if(unassignedRows>0)actions.push({level:"Средний",title:"Отдельно проверить сводные отчёты без разбивки по точкам",description:"В наборе "+unassignedRows.toLocaleString("ru-RU")+" строк из файлов без названия пиццерии. Они не включены в суммы по отдельным точкам, чтобы не задвоить сетевые итоги."});
+   if(unassignedRows>0)actions.push({level:"Средний",title:"Отдельно проверить сводные отчёты без разбивки по точкам",text:"В наборе "+unassignedRows.toLocaleString("ru-RU")+" строк из файлов без названия пиццерии. Они не включены в суммы по отдельным точкам, чтобы не задвоить сетевые итоги."});
   const salesPeriods=[...new Set(all.filter(row=>row["Тип отчёта"]==="Продажи блюд").map(row=>String(row["Период отчёта"]||"").trim()).filter(x=>x&&!x.startsWith("Не подтверждён")))];
   actions.push({level:"Средний",title:"Подтвердить периоды отчётов",text:"Период продаж: "+(salesPeriods.join(", ")||"не указан")+". Для закупок, порчи и инвентаризации период следует подтвердить в исходных отчётах iiko."});
   const actionHtml=actions.map(a=>'<article class="action-card"><span class="tag '+(a.level==="Высокий"?"high":"normal")+'">'+a.level+'</span><b>'+esc(a.title)+'</b><p>'+esc(a.text)+'</p></article>').join("");
@@ -475,7 +475,7 @@ async function renderExecutiveDashboard(){
    metric("Недостачи",rub(data.shortages),"Отдельно от излишков")+
    metric("Излишки",rub(data.surpluses),"Не считать прибылью")+
    metric("Покрытие сети",data.pizzeriaCount+" / 19","Не хватает отчётов по "+data.missingPoints+" точкам")+
-   metric("Строк данных",data.rows.toLocaleString("ru-RU"),data.unknownPointRows?data.unknownPointRows.toLocaleString("ru-RU")+" без точки":"Все строки имеют точку")+
+   metric("Строк данных",data.rows.toLocaleString("ru-RU"),(data.unknownPointRows+data.unassignedRows)?(data.unknownPointRows+data.unassignedRows).toLocaleString("ru-RU")+" без привязки к пиццерии":"Все строки имеют точку")+
   '</div>'+
   '<div class="exec-grid">'+
    '<section class="card exec-panel"><div class="bar"><h3>Что требует внимания</h3><span class="muted">'+data.actions.length+' рекомендаций</span></div><div class="exec-actions">'+actionHtml+'</div></section>'+
