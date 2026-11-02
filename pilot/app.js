@@ -443,7 +443,7 @@ async function renderExecutiveDashboard(){
    const outliers=retail.filter(x=>x.shortages>100000||x.surpluses>100000).sort((a,b)=>(b.shortages+b.surpluses)-(a.shortages+a.surpluses)).slice(0,4);
    outliers.forEach(x=>actions.push({level:"Высокий",title:"Разобрать инвентаризационные расхождения · "+x.point,description:"Недостачи "+rub(x.shortages)+"; излишки "+rub(x.surpluses)+". Проверять отдельно, без взаимозачёта; начать с крупнейших артикулов и складов."}));
    if(zeroQtyWithAmount>0)actions.push({level:"Средний",title:"Проверить строки порчи с нулевым количеством",description:zeroQtyWithAmount.toLocaleString("ru-RU")+" строк имеют денежную сумму при нулевом количестве. Уточнить правила выгрузки iiko; пока не использовать их для количественных норм."});
-   if(missingPoints>0)actions.push({level:"Средний",title:"Дополнить покрытие сети",description:"В текущем наборе "+pizzeriaCount+" пиццерий из 19. Не хватает отчётов ещё по "+missingPoints+" точкам; их названия нужно подтвердить."});
+   if(missingPoints>0)actions.push({level:"Средний",title:"Сверить покрытие сети",description:"В расчёте распознано "+pizzeriaCount+" названий точек из ожидаемых 19. Сверить перечень четырёх нераспознанных точек с официальным списком сети и проверить названия файлов."});
    if(!periodsConfirmed||rows.some(r=>["Закупки","Порча","Инвентаризационные расхождения"].includes(r["Тип отчёта"])&&String(r["Период отчёта"]||"").startsWith("Не подтверждён")))actions.push({level:"Средний",title:"Подтвердить периоды отчётов",description:"Продажи: "+([...salesPeriods].join(", ")||"период не указан")+". Периоды закупок, порчи и инвентаризации нужно подтвердить в настройках отчётов iiko, прежде чем сравнивать их напрямую."});
    if(unknownPointRows>0)actions.push({level:"Высокий",title:"Уточнить привязку строк к пиццериям",description:unknownPointRows.toLocaleString("ru-RU")+" строк не удалось отнести к конкретной точке. Проверьте имена исходных файлов и названия подразделений."});
    if(unassignedRows>0)actions.push({level:"Средний",title:"Отдельно проверить сводные отчёты без разбивки по точкам",description:"В наборе "+unassignedRows.toLocaleString("ru-RU")+" строк из файлов без названия пиццерии. Они не включены в суммы по отдельным точкам, чтобы не задвоить сетевые итоги."});
@@ -470,22 +470,22 @@ async function renderExecutiveDashboard(){
   '<div class="exec-kpis">'+
    metric("Выручка пиццерий",rub(data.sales),"Продажи "+(data.salesPeriods.join(", ")||"период не подтверждён"))+
    metric("Валовая прибыль",data.grossProfit===null?"—":rub(data.grossProfit),data.grossProfit===null?"Поле отсутствует в загруженном наборе":"По строкам отчёта о продажах")+
-   metric("Закупки пиццерий",rub(data.purchases),data.purchaseRows.toLocaleString("ru-RU")+" строк; период подтвердить")+
-   metric("Порча",rub(data.spoilage),data.spoilRows.toLocaleString("ru-RU")+" строк; предварительная оценка")+
-   metric("Недостачи",rub(data.shortages),"Отдельно от излишков")+
-   metric("Излишки",rub(data.surpluses),"Не считать прибылью")+
-   metric("Покрытие сети",data.pizzeriaCount+" / 19","Не хватает отчётов по "+data.missingPoints+" точкам")+
+   metric("Закупки пиццерий",rub(data.purchases),data.purchaseRows.toLocaleString("ru-RU")+" записей · период не подтверждён")+
+   metric("Порча",rub(data.spoilage),data.spoilRows.toLocaleString("ru-RU")+" записей · сумма требует проверки")+
+   metric("Недостачи",rub(data.shortages),"По отчёту инвентаризации")+
+   metric("Излишки",rub(data.surpluses),"По отчёту инвентаризации")+
+   metric("Точки в данных",data.pizzeriaCount+" / 19",data.missingPoints+" названия точек требуют сверки")+
    metric("Строк данных",data.rows.toLocaleString("ru-RU"),(data.unknownPointRows+data.unassignedRows)?(data.unknownPointRows+data.unassignedRows).toLocaleString("ru-RU")+" без привязки к пиццерии":"Все строки имеют точку")+
   '</div>'+
   '<div class="exec-grid">'+
    '<section class="card exec-panel"><div class="bar"><h3>Что требует внимания</h3><span class="muted">'+data.actions.length+' рекомендаций</span></div><div class="exec-actions">'+actionHtml+'</div></section>'+
-   '<section class="card exec-panel"><h3>Качество и полнота данных</h3><ul class="exec-quality">'+
+   '<section class="card exec-panel"><h3>Что проверить перед решениями</h3><ul class="exec-quality">'+
     '<li>Продажи: '+(data.salesPeriods.join(", ")||"период не указан")+'</li>'+
-    '<li>Периоды закупок, порчи и инвентаризации требуют подтверждения</li>'+
-    '<li>Строк порчи с нулевым количеством и суммой: '+data.zeroQtyWithAmount.toLocaleString("ru-RU")+'</li>'+
-    '<li>Отчёты по пиццериям: '+data.pizzeriaCount+' из 19; ПРЦ учитывается отдельно</li>'+
+    '<li>Закупки: '+data.purchaseRows.toLocaleString("ru-RU")+' записей; период отчёта не подтверждён</li>'+'<li>Порча: '+data.spoilRows.toLocaleString("ru-RU")+' записей; денежная оценка предварительная до сверки первичных документов</li>'+
+    '<li>Порча: '+data.zeroQtyWithAmount.toLocaleString("ru-RU")+' записей с нулевым количеством, но ненулевой суммой — проверить правила выгрузки</li>'+
+    '<li>В данных распознано '+data.pizzeriaCount+' названий точек из ожидаемых 19; '+data.missingPoints+' точки нужно сверить с официальным перечнем. ПРЦ учитывается отдельно</li>'+
     '<li>Сводные строки без разбивки по точкам: '+data.unassignedRows.toLocaleString("ru-RU")+'; не включены в суммы пиццерий</li>'+
-    '<li>Недостачи и излишки не взаимозачитываются</li>'+
+    '<li>Недостачи и излишки показаны отдельно: излишки не являются прибылью и не уменьшают недостачи</li>'+
    '</ul><p class="exec-footnote">Рекомендации — сигналы для проверки. Платформа не оформляет и не отправляет заказы поставщикам автоматически.</p></section>'+
   '</div>'+
   '<section class="card exec-panel"><div class="bar"><h3>Пиццерии с наибольшими сигналами</h3><button class="link" type="button" data-dashboard-go="analytics">Полная таблица →</button></div><div class="table-scroll"><table class="data-preview"><thead><tr><th>Точка</th><th>Закупки</th><th>Выручка</th><th>Порча</th><th>Недостачи</th><th>Излишки</th></tr></thead><tbody>'+branchRows+'</tbody></table></div></section>'+
