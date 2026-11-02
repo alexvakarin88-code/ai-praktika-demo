@@ -98,7 +98,7 @@ function firstField(row,names,fallback=""){
 function pointFromSource(source,datasetName=""){
  const text=normalizedHeader(String(source||"")+" "+String(datasetName||""));
  const points=[
-  ["Берёзовый",["березовый","берез"]],
+  ["Берёзовый",["березовый","берез","бер"]],
   ["Шелехов",["шелехов","шел"]],
   ["Лермонтова",["лермонтова","лерм"]],
   ["Братск",["братск"]],
