@@ -14,7 +14,8 @@ create policy "workspace members read workspace" on public.workspaces for select
 create policy "member reads membership" on public.workspace_members for select to authenticated using(user_id=auth.uid() or public.is_workspace_owner(workspace_id));
 create policy "members read datasets" on public.datasets for select to authenticated using(public.is_workspace_member(workspace_id));
 create policy "members add datasets" on public.datasets for insert to authenticated with check(public.is_workspace_member(workspace_id) and uploaded_by=auth.uid());
-create policy "owners delete datasets" on public.datasets for delete to authenticated using(public.is_workspace_owner(workspace_id));
+create policy "owners and uploaders delete datasets" on public.datasets for delete to authenticated using(public.is_workspace_member(workspace_id) and (public.is_workspace_owner(workspace_id) or uploaded_by=auth.uid()));
+grant delete on public.datasets to authenticated;
 create policy "members read tasks" on public.tasks for select to authenticated using(public.is_workspace_member(workspace_id));
 create policy "members add tasks" on public.tasks for insert to authenticated with check(public.is_workspace_member(workspace_id) and created_by=auth.uid());
 create policy "members update tasks" on public.tasks for update to authenticated using(public.is_workspace_member(workspace_id)) with check(public.is_workspace_member(workspace_id) and updated_by=auth.uid());
