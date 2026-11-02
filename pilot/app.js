@@ -206,13 +206,8 @@ async function openAnalytics(id){
  loading.textContent="Загружаю сохранённые части набора и рассчитываю показатели…";
  content.innerHTML="";
  try{
-  const chunkCount=Number(dataset.stored_chunks||Math.ceil(Number(dataset.row_count||0)/2000));
-  const all=[];
-  for(let i=0;i<chunkCount;i++){
-   const part=await getDatasetChunk(id,i);
-   if(part?.length)all.push(...part);
-   loading.textContent="Загружено "+all.length.toLocaleString("ru-RU")+" из "+Number(dataset.row_count||0).toLocaleString("ru-RU")+" строк…";
-  }
+  const all=await readAllDatasetRows(dataset);
+  loading.textContent="Загружено "+all.length.toLocaleString("ru-RU")+" строк. Рассчитываю показатели…";
   if(!all.length)throw new Error("В наборе нет сохранённых строк.");
   const byPoint=new Map();
   const getPoint=name=>{if(!byPoint.has(name))byPoint.set(name,{point:name,purchases:0,sales:0,spoilage:0,shortages:0,surpluses:0,purchaseRows:0,salesRows:0,spoilageRows:0});return byPoint.get(name)};
