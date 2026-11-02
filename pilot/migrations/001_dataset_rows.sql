@@ -38,3 +38,12 @@ create policy "members add dataset rows"
   );
 
 grant select, insert on public.dataset_rows to authenticated;
+
+-- Allow a user to remove their own upload if a multi-part upload fails.
+drop policy if exists "uploaders delete own datasets" on public.datasets;
+create policy "uploaders delete own datasets"
+  on public.datasets for delete to authenticated
+  using (
+    uploaded_by = auth.uid()
+    and public.is_workspace_member(workspace_id)
+  );
