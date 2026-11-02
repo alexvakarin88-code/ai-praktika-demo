@@ -1,10 +1,73 @@
-(()=>{const c=window.APP_CONFIG||{},$=id=>document.getElementById(id),s={db:null,user:null,role:null,wid:null,tasks:[],datasets:[],feedback:[],history:[],filter:"all",schemaReady:false,resumeDatasetId:null};const labels={open:"Новая",progress:"В работе",done:"Решена"},types={bug:"Ошибка",confusing:"Непонятно",idea:"Идея",positive:"Полезно"},esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),date=x=>x?new Date(x).toLocaleString("ru-RU"):"";function toast(t){$("toast").textContent=t;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3000)}function page(p){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+p).classList.add("active");document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===p));$("pageTitle").textContent=({overview:"Обзор",tasks:"Задачи",data:"Данные",feedback:"Обратная связь",history:"История"})[p]}async function log(event,summary){let r=await s.db.from("activity_log").insert({workspace_id:s.wid,actor_id:s.user.id,event_type:event,details:{summary}});if(r.error)console.warn(r.error.message)}async function membership(){let r=await s.db.from("workspace_members").select("workspace_id,role").eq("workspace_id",c.workspaceId).eq("user_id",s.user.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("Для этого аккаунта не выдан доступ. Обратитесь к владельцу пилота.");s.role=r.data.role;s.wid=r.data.workspace_id}function taskCard(t){return '<article class="item"><div class="bar"><b>'+esc(t.title)+'</b><span class="tag '+t.status+'">'+labels[t.status]+'</span></div><p>'+esc(t.description||"Описание не добавлено")+'</p>'+(t.last_comment?'<p><b>Комментарий:</b> '+esc(t.last_comment)+'</p>':'')+'<small>'+date(t.updated_at)+'</small><div class="bar" style="justify-content:flex-start;margin-top:8px"><button class="ghost" data-edit="'+t.id+'">Открыть / изменить</button>'+(s.role==="owner"?'<button class="ghost" data-delete="'+t.id+'">Удалить</button>':'')+'</div></article>'}function historyCard(x){return '<article class="item"><b>'+esc(x.event_type)+'</b><p>'+esc(x.details?.summary||"")+'</p><small>'+date(x.created_at)+'</small></article>'}function datasetCard(x){
+(()=>{const c=window.APP_CONFIG||{},$=id=>document.getElementById(id),s={db:null,user:null,role:null,wid:null,tasks:[],datasets:[],feedback:[],history:[],filter:"all",schemaReady:false,resumeDatasetId:null,datasetViewer:null};const labels={open:"Новая",progress:"В работе",done:"Решена"},types={bug:"Ошибка",confusing:"Непонятно",idea:"Идея",positive:"Полезно"},esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),date=x=>x?new Date(x).toLocaleString("ru-RU"):"";function toast(t){$("toast").textContent=t;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3000)}function page(p){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+p).classList.add("active");document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===p));$("pageTitle").textContent=({overview:"Обзор",tasks:"Задачи",data:"Данные",feedback:"Обратная связь",history:"История"})[p]}async function log(event,summary){let r=await s.db.from("activity_log").insert({workspace_id:s.wid,actor_id:s.user.id,event_type:event,details:{summary}});if(r.error)console.warn(r.error.message)}async function membership(){let r=await s.db.from("workspace_members").select("workspace_id,role").eq("workspace_id",c.workspaceId).eq("user_id",s.user.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("Для этого аккаунта не выдан доступ. Обратитесь к владельцу пилота.");s.role=r.data.role;s.wid=r.data.workspace_id}function taskCard(t){return '<article class="item"><div class="bar"><b>'+esc(t.title)+'</b><span class="tag '+t.status+'">'+labels[t.status]+'</span></div><p>'+esc(t.description||"Описание не добавлено")+'</p>'+(t.last_comment?'<p><b>Комментарий:</b> '+esc(t.last_comment)+'</p>':'')+'<small>'+date(t.updated_at)+'</small><div class="bar" style="justify-content:flex-start;margin-top:8px"><button class="ghost" data-edit="'+t.id+'">Открыть / изменить</button>'+(s.role==="owner"?'<button class="ghost" data-delete="'+t.id+'">Удалить</button>':'')+'</div></article>'}function historyCard(x){return '<article class="item"><b>'+esc(x.event_type)+'</b><p>'+esc(x.details?.summary||"")+'</p><small>'+date(x.created_at)+'</small></article>'}function datasetCard(x){
  const status=x.upload_status||"complete",done=status==="complete";
  const actual=Number(x.stored_row_count||0),expected=Number(x.row_count||0);
  const statusText=done?"Завершено":x.source_file_hash?"Загрузка прервана — можно продолжить":"Нужна повторная загрузка";
  const countText=done?expected+" строк":actual+" из "+expected+" строк сохранено";
  const resume=(!done&&x.uploaded_by===s.user.id&&x.source_file_hash)?'<button class="ghost" data-resume="'+esc(x.id)+'">Продолжить загрузку</button>':"";
- return '<article class="item"><div class="bar"><b>'+esc(x.name)+'</b><small>'+statusText+'</small></div><p>'+countText+' · '+esc(x.notes||"")+'</p>'+(x.upload_error?'<p class="error">'+esc(x.upload_error)+'</p>':"")+'<small>'+date(x.created_at)+'</small><div style="margin-top:8px">'+resume+'</div></article>';
+ const openAttrs=done?' data-open-dataset="'+esc(x.id)+'" role="button" tabindex="0"':"";const openHint=done?'<small class="open-hint">Нажмите, чтобы просмотреть таблицу →</small>':"";return '<article class="item'+(done?' dataset-card':'')+'"'+openAttrs+'><div class="bar"><b>'+esc(x.name)+'</b><small>'+statusText+'</small></div><p>'+countText+' · '+esc(x.notes||"")+'</p>'+(x.upload_error?'<p class="error">'+esc(x.upload_error)+'</p>':"")+'<small>'+date(x.created_at)+'</small>'+openHint+'<div style="margin-top:8px">'+resume+'</div></article>';
+}
+async function getDatasetChunk(datasetId,chunkIndex){
+ const r=await s.db.from("dataset_rows").select("chunk_index,rows").eq("dataset_id",datasetId).eq("chunk_index",chunkIndex).maybeSingle();
+ if(r.error)throw r.error;
+ return r.data?.rows||null;
+}
+function renderDatasetViewer(){
+ const v=s.datasetViewer;if(!v)return;
+ const columns=v.columns.length?v.columns:Object.keys(v.rows[0]||{});
+ const start=v.page*100,visible=v.rows.slice(start,start+100);
+ const cell=value=>value===null||value===undefined?"":typeof value==="object"?JSON.stringify(value):String(value);
+ $("datasetTable").innerHTML="<thead><tr>"+columns.map(c=>"<th>"+esc(c)+"</th>").join("")+"</tr></thead><tbody>"+visible.map(row=>"<tr>"+columns.map(c=>"<td>"+esc(cell(row?.[c]))+"</td>").join("")+"</tr>").join("")+"</tbody>";
+ const pageCount=Math.max(1,Math.ceil(v.rows.length/100));
+ $("datasetViewerTitle").textContent=v.dataset.name;
+ $("datasetViewerMeta").textContent="Всего в наборе: "+Number(v.dataset.row_count||0).toLocaleString("ru-RU")+" строк";
+ $("datasetViewerMessage").textContent="Пакет "+(v.chunkIndex+1)+": показаны строки "+(start+1)+"–"+(start+visible.length)+" из "+v.rows.length+" строк пакета. Программа загружает данные частями.";
+ $("datasetPageInfo").textContent="Страница "+(v.page+1)+" из "+pageCount+" · пакет "+(v.chunkIndex+1);
+ $("datasetPrev").disabled=v.page===0&&(v.legacy||v.chunkIndex===0);
+ $("datasetNext").disabled=v.legacy&&v.page>=pageCount-1;
+}
+async function openDataset(id){
+ const dataset=s.datasets.find(x=>x.id===id);if(!dataset)return;
+ if((dataset.upload_status||"complete")!=="complete"){toast("Этот набор ещё не завершён.");return}
+ const panel=$("datasetViewer");panel.classList.remove("hidden");
+ $("datasetViewerTitle").textContent=dataset.name;
+ $("datasetViewerMessage").textContent="Загружаю первые строки таблицы…";
+ $("datasetTable").innerHTML="";
+ try{
+  let rows=await getDatasetChunk(id,0),columns=Array.isArray(dataset.columns)?dataset.columns:[];
+  let legacy=false;
+  if(!rows||!rows.length){
+   const r=await s.db.from("datasets").select("columns,rows").eq("id",id).eq("workspace_id",s.wid).single();
+   if(r.error)throw r.error;
+   rows=Array.isArray(r.data.rows)?r.data.rows:[];
+   if(Array.isArray(r.data.columns)&&r.data.columns.length)columns=r.data.columns;
+   legacy=true;
+  }
+  if(!rows.length)throw new Error("В наборе не найдены сохранённые строки.");
+  if(!columns.length)columns=Object.keys(rows[0]||{});
+  s.datasetViewer={dataset,columns,rows,chunkIndex:0,page:0,legacy};
+  renderDatasetViewer();
+ }catch(error){
+  $("datasetViewerMessage").textContent="Не удалось открыть таблицу: "+(error.message||String(error));
+  $("datasetTable").innerHTML="";
+ }
+}
+async function moveDatasetPage(direction){
+ const v=s.datasetViewer;if(!v)return;
+ try{
+  const pageCount=Math.max(1,Math.ceil(v.rows.length/100));
+  if(direction>0){
+   if(v.page<pageCount-1){v.page++;renderDatasetViewer();return}
+   if(v.legacy)return;
+   const next=await getDatasetChunk(v.dataset.id,v.chunkIndex+1);
+   if(!next||!next.length){toast("Это последняя часть таблицы.");return}
+   v.chunkIndex++;v.rows=next;v.page=0;renderDatasetViewer();return;
+  }
+  if(v.page>0){v.page--;renderDatasetViewer();return}
+  if(v.legacy||v.chunkIndex===0)return;
+  const previous=await getDatasetChunk(v.dataset.id,v.chunkIndex-1);
+  if(!previous||!previous.length){toast("Предыдущая часть таблицы не найдена.");return}
+  v.chunkIndex--;v.rows=previous;v.page=Math.max(0,Math.ceil(previous.length/100)-1);renderDatasetViewer();
+ }catch(error){toast("Ошибка чтения данных: "+(error.message||String(error)))}
 }
 function render(){
  let n=s.tasks.filter(x=>x.status==="open").length,p=s.tasks.filter(x=>x.status==="progress").length,d=s.tasks.filter(x=>x.status==="done").length;
@@ -24,9 +87,9 @@ async function refresh(){
   s.db.from("activity_log").select("*").eq("workspace_id",s.wid).order("created_at",{ascending:false}).limit(100)
  ]);
  for(const x of q)if(x.error)throw x.error;
- const ds=await s.db.from("datasets").select("id,name,notes,row_count,created_at,uploaded_by,upload_status,upload_error,stored_row_count,stored_chunks,source_file_name,source_file_size,source_file_last_modified,source_file_hash").eq("workspace_id",s.wid).order("created_at",{ascending:false});
+ const ds=await s.db.from("datasets").select("id,name,notes,row_count,columns,created_at,uploaded_by,upload_status,upload_error,stored_row_count,stored_chunks,source_file_name,source_file_size,source_file_last_modified,source_file_hash").eq("workspace_id",s.wid).order("created_at",{ascending:false});
  if(ds.error){
-  const legacy=await s.db.from("datasets").select("id,name,notes,row_count,created_at,uploaded_by").eq("workspace_id",s.wid).order("created_at",{ascending:false});
+  const legacy=await s.db.from("datasets").select("id,name,notes,row_count,columns,created_at,uploaded_by").eq("workspace_id",s.wid).order("created_at",{ascending:false});
   if(legacy.error)throw legacy.error;
   s.schemaReady=false;
   s.datasets=(legacy.data||[]).map(x=>({...x,upload_status:"complete",stored_row_count:x.row_count||0}));
@@ -193,4 +256,4 @@ function openTask(id=""){let t=s.tasks.find(x=>x.id===id);$("taskForm").reset();
   worker.postMessage({file:f});
  }catch(err){await fail(err)}
 }
-async function feedback(e){e.preventDefault();let p={workspace_id:s.wid,user_id:s.user.id,feedback_type:$("fbType").value,page_name:$("fbPage").value.trim(),message:$("fbText").value.trim(),priority:$("fbPriority").value},r=await s.db.from("feedback").insert(p);if(r.error){$("fbMsg").textContent=r.error.message;return}await log("Обратная связь",types[p.feedback_type]+": "+p.message.slice(0,140));$("feedbackForm").reset();$("fbMsg").textContent="Спасибо! Отзыв сохранён.";await refresh()}async function enter(){let r=await s.db.from("workspace_members").select("workspace_id,role").eq("workspace_id",c.workspaceId).eq("user_id",s.user.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("У этой учётной записи нет доступа к пилоту.");s.role=r.data.role;s.wid=r.data.workspace_id;$("login").classList.add("hidden");$("app").classList.remove("hidden");$("userEmail").textContent=s.user.email;$("userRole").textContent=s.role==="owner"?"Владелец пилота":"Тестировщик";await refresh()}async function init(){if(!c.supabaseUrl||!c.supabaseAnonKey||!c.workspaceId||!window.supabase){$("loginError").textContent="Нужно настроить config.js по инструкции README.";return}s.db=window.supabase.createClient(c.supabaseUrl,c.supabaseAnonKey);let r=await s.db.auth.getSession();if(r.data.session){s.user=r.data.session.user;try{await enter()}catch(x){$("loginError").textContent=x.message}}s.db.auth.onAuthStateChange(async(_e,session)=>{if(!session){s.user=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");return}s.user=session.user;try{await enter()}catch(x){$("loginError").textContent=x.message}})}$("loginForm").onsubmit=async e=>{e.preventDefault();$("loginError").textContent="";if(!s.db){$("loginError").textContent="Сначала настройте приложение.";return}let r=await s.db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(r.error)$("loginError").textContent=r.error.message};$("logout").onclick=()=>s.db.auth.signOut();$("nav").onclick=e=>{let b=e.target.closest("[data-page]");if(b)page(b.dataset.page)};document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>page(b.dataset.go));$("newTask").onclick=()=>openTask();$("closeDialog").onclick=$("cancelDialog").onclick=()=>$("taskDialog").close();$("taskForm").onsubmit=saveTask;$("taskList").onclick=e=>{let a=e.target.closest("[data-edit]"),b=e.target.closest("[data-delete]");if(a)openTask(a.dataset.edit);if(b)deleteTask(b.dataset.delete)};document.querySelector(".filters").onclick=e=>{let b=e.target.closest("[data-filter]");if(!b)return;s.filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));render()};$("uploadForm").onsubmit=upload;$("datasetList").onclick=e=>{const b=e.target.closest("[data-resume]");if(!b)return;const d=s.datasets.find(x=>x.id===b.dataset.resume);if(!d)return;s.resumeDatasetId=d.id;$("dataName").value=d.name;$("dataNotes").value=d.notes||"";$("dataFile").value="";$("uploadMsg").textContent="Выберите тот же исходный файл Excel, который загружали ранее.";$("dataFile").click()};$("feedbackForm").onsubmit=feedback;$("refresh").onclick=()=>refresh().catch(x=>toast(x.message));init()})();
+async function feedback(e){e.preventDefault();let p={workspace_id:s.wid,user_id:s.user.id,feedback_type:$("fbType").value,page_name:$("fbPage").value.trim(),message:$("fbText").value.trim(),priority:$("fbPriority").value},r=await s.db.from("feedback").insert(p);if(r.error){$("fbMsg").textContent=r.error.message;return}await log("Обратная связь",types[p.feedback_type]+": "+p.message.slice(0,140));$("feedbackForm").reset();$("fbMsg").textContent="Спасибо! Отзыв сохранён.";await refresh()}async function enter(){let r=await s.db.from("workspace_members").select("workspace_id,role").eq("workspace_id",c.workspaceId).eq("user_id",s.user.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("У этой учётной записи нет доступа к пилоту.");s.role=r.data.role;s.wid=r.data.workspace_id;$("login").classList.add("hidden");$("app").classList.remove("hidden");$("userEmail").textContent=s.user.email;$("userRole").textContent=s.role==="owner"?"Владелец пилота":"Тестировщик";await refresh()}async function init(){if(!c.supabaseUrl||!c.supabaseAnonKey||!c.workspaceId||!window.supabase){$("loginError").textContent="Нужно настроить config.js по инструкции README.";return}s.db=window.supabase.createClient(c.supabaseUrl,c.supabaseAnonKey);let r=await s.db.auth.getSession();if(r.data.session){s.user=r.data.session.user;try{await enter()}catch(x){$("loginError").textContent=x.message}}s.db.auth.onAuthStateChange(async(_e,session)=>{if(!session){s.user=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");return}s.user=session.user;try{await enter()}catch(x){$("loginError").textContent=x.message}})}$("loginForm").onsubmit=async e=>{e.preventDefault();$("loginError").textContent="";if(!s.db){$("loginError").textContent="Сначала настройте приложение.";return}let r=await s.db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(r.error)$("loginError").textContent=r.error.message};$("logout").onclick=()=>s.db.auth.signOut();$("nav").onclick=e=>{let b=e.target.closest("[data-page]");if(b)page(b.dataset.page)};document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>page(b.dataset.go));$("newTask").onclick=()=>openTask();$("closeDialog").onclick=$("cancelDialog").onclick=()=>$("taskDialog").close();$("taskForm").onsubmit=saveTask;$("taskList").onclick=e=>{let a=e.target.closest("[data-edit]"),b=e.target.closest("[data-delete]");if(a)openTask(a.dataset.edit);if(b)deleteTask(b.dataset.delete)};document.querySelector(".filters").onclick=e=>{let b=e.target.closest("[data-filter]");if(!b)return;s.filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));render()};$("uploadForm").onsubmit=upload;$("datasetList").onclick=e=>{const b=e.target.closest("[data-resume]");if(b){e.stopPropagation();const d=s.datasets.find(x=>x.id===b.dataset.resume);if(!d)return;s.resumeDatasetId=d.id;$("dataName").value=d.name;$("dataNotes").value=d.notes||"";$("dataFile").value="";$("uploadMsg").textContent="Выберите тот же исходный файл Excel, который загружали ранее.";$("dataFile").click();return}const card=e.target.closest("[data-open-dataset]");if(card)openDataset(card.dataset.openDataset)};$("datasetList").onkeydown=e=>{if(e.key!=="Enter"&&e.key!==" ")return;const card=e.target.closest("[data-open-dataset]");if(card&&e.target===card){e.preventDefault();openDataset(card.dataset.openDataset)}};$("closeDatasetViewer").onclick=()=>{$("datasetViewer").classList.add("hidden");s.datasetViewer=null};$("datasetPrev").onclick=()=>moveDatasetPage(-1);$("datasetNext").onclick=()=>moveDatasetPage(1);$("feedbackForm").onsubmit=feedback;$("refresh").onclick=()=>refresh().catch(x=>toast(x.message));init()})();
