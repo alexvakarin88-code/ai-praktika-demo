@@ -47,3 +47,17 @@ create policy "uploaders delete own datasets"
     uploaded_by = auth.uid()
     and public.is_workspace_member(workspace_id)
   );
+
+-- Mark a dataset as complete only after all chunks have been saved.
+drop policy if exists "uploaders update own datasets" on public.datasets;
+create policy "uploaders update own datasets"
+  on public.datasets for update to authenticated
+  using (
+    uploaded_by = auth.uid()
+    and public.is_workspace_member(workspace_id)
+  )
+  with check (
+    uploaded_by = auth.uid()
+    and public.is_workspace_member(workspace_id)
+  );
+grant update on public.datasets to authenticated;

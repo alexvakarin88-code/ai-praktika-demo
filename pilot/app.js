@@ -57,7 +57,7 @@ try{
    if(m.type==="meta"){
     const r=await s.db.from("datasets").insert({
      workspace_id:s.wid,name:$("dataName").value.trim(),notes:$("dataNotes").value.trim(),
-     row_count:m.totalRows,columns:m.columns,rows:[],uploaded_by:s.user.id
+     row_count:0,columns:m.columns,rows:[],uploaded_by:s.user.id
     }).select("id").single();
     if(r.error)throw r.error;
     datasetId=r.data.id;
@@ -74,6 +74,9 @@ try{
     worker.postMessage({type:"ack"});
    }else if(m.type==="done"){
     if(!datasetId)throw new Error("Файл не содержит строк с данными.");
+    const updated=await s.db.from("datasets").update({row_count:m.totalRows})
+      .eq("id",datasetId).eq("workspace_id",s.wid);
+    if(updated.error)throw updated.error;
     await log("Загружен набор данных",f.name+" · "+m.totalRows+" строк");
     finished=true;
     worker.terminate();
