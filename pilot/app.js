@@ -123,7 +123,7 @@ function openTask(id=""){let t=s.tasks.find(x=>x.id===id);$("taskForm").reset();
    if(found.error)throw found.error;
    const d=found.data;
    if(d.uploaded_by!==s.user.id)throw new Error("Продолжить загрузку может только пользователь, который её начал.");
-   if(!d.source_file_hash||d.source_file_hash!==m.fileHash||Number(d.source_file_size)!==f.size||Number(d.source_file_last_modified)!==Number(f.lastModified)||Number(d.row_count)!==Number(m.totalRows)){
+   if(!d.source_file_hash||d.source_file_hash!==m.fileHash||Number(d.source_file_size)!==f.size||Number(d.row_count)!==Number(m.totalRows)){
     throw new Error("Выбран не тот исходный файл. Для продолжения выберите исходную версию Excel без изменений.");
    }
    datasetId=d.id;actualSavedRows=Number(d.stored_row_count||0);
