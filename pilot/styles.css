@@ -25,3 +25,8 @@
  .analytics-home-stats{grid-template-columns:1fr 1fr}
  .analytics-home-stats>div:last-child{grid-column:1/-1}
 }
+
+.quickstart{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:14px 0}
+.quickstart p{margin:5px 0 0;font-size:12px}
+.quickstart-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:700px){.quickstart{align-items:flex-start;flex-direction:column}.quickstart-actions{width:100%}.quickstart-actions button{flex:1}}
