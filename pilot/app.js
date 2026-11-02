@@ -427,7 +427,7 @@ async function renderExecutiveDashboard(){
      if(op.includes("Излишки")){g.surpluses+=Math.abs(signed);surpluses+=Math.abs(signed)}
     }else unknownTypes.add(type||"Не указан");
    }
-   const retail=[...byPoint.values()].filter(x=>x.point!=="ПРЦ"&&x.point!=="Не указано");
+   const retail=[...byPoint.values()].filter(x=>x.point!=="ПРЦ"&&x.point!=="Не указано"&&x.point!=="Сводный отчёт");
    const pizzeriaCount=new Set(retail.map(x=>x.point)).size;
    const missingPoints=Math.max(0,19-pizzeriaCount);
    const top=[...topSpoil.values()].sort((a,b)=>b.amount-a.amount).slice(0,5);
@@ -442,6 +442,7 @@ async function renderExecutiveDashboard(){
    if(missingPoints>0)actions.push({level:"Средний",title:"Дополнить покрытие сети",description:"В текущем наборе "+pizzeriaCount+" пиццерий из 19. Не хватает отчётов ещё по "+missingPoints+" точкам; их названия нужно подтвердить."});
    if(!periodsConfirmed||rows.some(r=>["Закупки","Порча","Инвентаризационные расхождения"].includes(r["Тип отчёта"])&&String(r["Период отчёта"]||"").startsWith("Не подтверждён")))actions.push({level:"Средний",title:"Подтвердить периоды отчётов",description:"Продажи: "+([...salesPeriods].join(", ")||"период не указан")+". Периоды закупок, порчи и инвентаризации нужно подтвердить в настройках отчётов iiko, прежде чем сравнивать их напрямую."});
    if(unknownPointRows>0)actions.push({level:"Высокий",title:"Уточнить привязку строк к пиццериям",description:unknownPointRows.toLocaleString("ru-RU")+" строк не удалось отнести к конкретной точке. Проверьте имена исходных файлов и названия подразделений."});
+   if(unassignedRows>0)actions.push({level:"Средний",title:"Отдельно проверить сводные отчёты без разбивки по точкам",description:"В наборе "+unassignedRows.toLocaleString("ru-RU")+" строк из файлов без названия пиццерии. Они не включены в суммы по отдельным точкам, чтобы не задвоить сетевые итоги."});
    data={rows:rows.length,purchases:sumRetail("purchases"),sales:sumRetail("sales"),grossProfit:sumRetail("grossProfit"),spoilage:sumRetail("spoilage"),shortages:sumRetail("shortages"),surpluses:sumRetail("surpluses"),pizzeriaCount,missingPoints,unknownPointRows,unassignedRows,zeroQtyWithAmount,purchaseRows,salesRows,spoilRows,inventoryRows,salesPeriods:[...salesPeriods],top,branches,actions,unknownTypes:[...unknownTypes],sourceName:combined.name,sourceDate:combined.created_at};
    s.dashboardCache=data;s.dashboardDatasetId=combined.id;s.dashboardActions=actions;
   }catch(error){
