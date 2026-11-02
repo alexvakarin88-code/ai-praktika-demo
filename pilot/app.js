@@ -5,58 +5,89 @@ if(!f){msg.textContent="Сначала выберите файл.";return}
 if(f.size>100*1024*1024){msg.textContent="Файл больше 100 МБ. Для такой ведомости потребуется отдельная обработка.";return}
 if(btn)btn.disabled=true;
 msg.textContent=f.size>25*1024*1024?"Большой файл. Подготовка в отдельном потоке…":"Подготовка файла…";
-let worker=null,datasetId=null,chunkCount=0,chain=Promise.resolve(),finished=false;
+let worker=null,datasetId=null,chunkCount=0,finished=false;
 const cleanup=async()=>{
- if(datasetId){const d=await s.db.from("datasets").delete().eq("id",datasetId).eq("workspace_id",s.wid);if(d.error)console.warn("Не удалось удалить неполный набор:",d.error.message);datasetId=null}
+ if(!datasetId)return;
+ const d=await s.db.from("datasets").delete().eq("id",datasetId).eq("workspace_id",s.wid);
+ if(d.error)console.warn("Не удалось удалить неполный набор:",d.error.message);
+ datasetId=null;
 };
 const fail=async err=>{
- if(finished)return;finished=true;
+ if(finished)return;
+ finished=true;
  if(worker)worker.terminate();
  try{await cleanup()}catch(_){}
  msg.textContent="Не удалось сохранить файл: "+(err?.message||String(err));
  if(btn)btn.disabled=false;
 };
+const transientError=err=>{
+ const message=String(err?.message||err||"");
+ return err instanceof TypeError ||
+  /failed to fetch|network|timeout|temporar|connection|load failed/i.test(message) ||
+  err?.status===429 || Number(err?.status)>=500;
+};
+const saveChunk=async payload=>{
+ let lastError=null;
+ for(let attempt=0;attempt<5;attempt++){
+  try{
+   const result=await s.db.from("dataset_rows").insert(payload);
+   if(!result.error)return;
+   if(result.error.code==="23505")return;
+   lastError=result.error;
+   if(!transientError(result.error))throw result.error;
+  }catch(error){
+   if(error?.code==="23505")return;
+   lastError=error;
+   if(!transientError(error))throw error;
+  }
+  if(attempt<4){
+   msg.textContent="Связь прервалась. Повторяю отправку части "+(payload.chunk_index+1)+" ("+(attempt+2)+"/5)…";
+   await new Promise(resolve=>setTimeout(resolve,Math.min(800*Math.pow(2,attempt),8000)));
+  }
+ }
+ throw lastError||new Error("Не удалось передать часть файла после нескольких попыток.");
+};
 try{
  worker=new Worker("parser-worker.js");
  worker.onerror=ev=>{ev.preventDefault();fail(new Error("Ошибка фонового обработчика. Попробуйте сохранить файл в формате XLSX или CSV."))};
- worker.onmessage=ev=>{
+ worker.onmessage=async ev=>{
   const m=ev.data||{};
-  if(m.type==="meta"){
-   chain=chain.then(async()=>{
+  if(finished)return;
+  try{
+   if(m.type==="meta"){
     const r=await s.db.from("datasets").insert({
      workspace_id:s.wid,name:$("dataName").value.trim(),notes:$("dataNotes").value.trim(),
-     row_count:m.totalRows,columns:m.columns,rows:[],uploaded_by:s.user.id
+     row_count:0,columns:m.columns,rows:[],uploaded_by:s.user.id
     }).select("id").single();
     if(r.error)throw r.error;
     datasetId=r.data.id;
-    msg.textContent="Файл прочитан. Сохраняю "+m.totalRows+" строк частями…";
-   }).catch(fail);
-  }else if(m.type==="chunk"){
-   chain=chain.then(async()=>{
+    msg.textContent="Файл прочитан. Сохраняю "+m.totalRows+" строк небольшими пакетами…";
+    worker.postMessage({type:"ack"});
+   }else if(m.type==="chunk"){
     if(!datasetId)throw new Error("Не удалось создать запись набора данных.");
-    const r=await s.db.from("dataset_rows").insert({
+    await saveChunk({
      dataset_id:datasetId,workspace_id:s.wid,chunk_index:m.chunkIndex,
      rows:m.rows,uploaded_by:s.user.id
     });
-    if(r.error)throw r.error;
     chunkCount++;
-    msg.textContent="Сохранение: "+m.processedRows+" из "+m.totalRows+" строк ("+chunkCount+" пакетов)…";
-   }).catch(fail);
-  }else if(m.type==="done"){
-   chain=chain.then(async()=>{
-    if(finished)return;
+    msg.textContent="Сохранение: "+m.processedRows+" из "+m.totalRows+" строк ("+chunkCount+" частей)…";
+    worker.postMessage({type:"ack"});
+   }else if(m.type==="done"){
     if(!datasetId)throw new Error("Файл не содержит строк с данными.");
+    const updated=await s.db.from("datasets").update({row_count:m.totalRows})
+      .eq("id",datasetId).eq("workspace_id",s.wid);
+    if(updated.error)throw updated.error;
     await log("Загружен набор данных",f.name+" · "+m.totalRows+" строк");
-    $("uploadForm").reset();
-    msg.textContent="Данные сохранены: "+m.totalRows+" строк, "+chunkCount+" частей.";
-    await refresh();
     finished=true;
     worker.terminate();
+    $("uploadForm").reset();
+    msg.textContent="Данные сохранены: "+m.totalRows+" строк, "+chunkCount+" частей.";
     if(btn)btn.disabled=false;
-   }).catch(fail);
-  }else if(m.type==="error"){
-   chain=chain.then(()=>{throw new Error(m.message||"Не удалось прочитать файл.")}).catch(fail);
-  }
+    try{await refresh()}catch(refreshError){console.warn(refreshError);toast("Данные сохранены, но список не обновился. Нажмите «Обновить».")}
+   }else if(m.type==="error"){
+    throw new Error(m.message||"Не удалось прочитать файл.");
+   }
+  }catch(error){await fail(error)}
  };
  worker.postMessage({file:f});
 }catch(err){await fail(err)}
