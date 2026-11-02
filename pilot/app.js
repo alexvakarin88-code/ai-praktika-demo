@@ -396,8 +396,8 @@ async function renderExecutiveDashboard(){
   try{
    const rows=await readAllDatasetRows(combined);
    const byPoint=new Map(),topSpoil=new Map(),salesPeriods=new Set(),unknownTypes=new Set();
-   let purchases=0,sales=0,grossProfit=0,spoilage=0,shortages=0,surpluses=0;
-   let purchaseRows=0,salesRows=0,spoilRows=0,inventoryRows=0,zeroQtyWithAmount=0,unknownPointRows=0;
+   let purchases=0,sales=0,grossProfit=0,grossProfitAvailable=false,spoilage=0,shortages=0,surpluses=0;
+   let purchaseRows=0,salesRows=0,spoilRows=0,inventoryRows=0,zeroQtyWithAmount=0,unknownPointRows=0,unassignedRows=0;
    const pointFor=name=>{if(!byPoint.has(name))byPoint.set(name,{point:name,purchases:0,sales:0,grossProfit:0,spoilage:0,shortages:0,surpluses:0});return byPoint.get(name)};
    for(const row of rows){
     const type=String(row["Тип отчёта"]||"");
@@ -408,10 +408,13 @@ async function renderExecutiveDashboard(){
     const qty=toNumber(row["Количество"]);
     const g=pointFor(point);
     if(point==="Не указано")unknownPointRows++;
+    if(point==="Сводный отчёт")unassignedRows++;
     if(type==="Закупки"){g.purchases+=amount;purchases+=amount;purchaseRows++}
     else if(type==="Продажи блюд"){
      const revenue=toNumber(row["Выручка, ₽"]??signed);
-     const profit=toNumber(row["Валовая прибыль, ₽"]);
+     const profitValue=row["Валовая прибыль, ₽"];
+     if(profitValue!==undefined&&profitValue!==null&&String(profitValue).trim()!=="")grossProfitAvailable=true;
+     const profit=toNumber(profitValue);
      g.sales+=revenue;g.grossProfit+=profit;sales+=revenue;grossProfit+=profit;salesRows++;
      const period=String(row["Период отчёта"]||"").trim();if(period&&!period.startsWith("Не подтверждён"))salesPeriods.add(period);
     }else if(type==="Порча"){
@@ -444,7 +447,7 @@ async function renderExecutiveDashboard(){
    if(!periodsConfirmed||rows.some(r=>["Закупки","Порча","Инвентаризационные расхождения"].includes(r["Тип отчёта"])&&String(r["Период отчёта"]||"").startsWith("Не подтверждён")))actions.push({level:"Средний",title:"Подтвердить периоды отчётов",description:"Продажи: "+([...salesPeriods].join(", ")||"период не указан")+". Периоды закупок, порчи и инвентаризации нужно подтвердить в настройках отчётов iiko, прежде чем сравнивать их напрямую."});
    if(unknownPointRows>0)actions.push({level:"Высокий",title:"Уточнить привязку строк к пиццериям",description:unknownPointRows.toLocaleString("ru-RU")+" строк не удалось отнести к конкретной точке. Проверьте имена исходных файлов и названия подразделений."});
    if(unassignedRows>0)actions.push({level:"Средний",title:"Отдельно проверить сводные отчёты без разбивки по точкам",description:"В наборе "+unassignedRows.toLocaleString("ru-RU")+" строк из файлов без названия пиццерии. Они не включены в суммы по отдельным точкам, чтобы не задвоить сетевые итоги."});
-   data={rows:rows.length,purchases:sumRetail("purchases"),sales:sumRetail("sales"),grossProfit:sumRetail("grossProfit"),spoilage:sumRetail("spoilage"),shortages:sumRetail("shortages"),surpluses:sumRetail("surpluses"),pizzeriaCount,missingPoints,unknownPointRows,unassignedRows,zeroQtyWithAmount,purchaseRows,salesRows,spoilRows,inventoryRows,salesPeriods:[...salesPeriods],top,branches,actions,unknownTypes:[...unknownTypes],sourceName:combined.name,sourceDate:combined.created_at};
+   data={rows:rows.length,purchases:sumRetail("purchases"),sales:sumRetail("sales"),grossProfit:grossProfitAvailable?sumRetail("grossProfit"):null,spoilage:sumRetail("spoilage"),shortages:sumRetail("shortages"),surpluses:sumRetail("surpluses"),pizzeriaCount,missingPoints,unknownPointRows,unassignedRows,zeroQtyWithAmount,purchaseRows,salesRows,spoilRows,inventoryRows,salesPeriods:[...salesPeriods],top,branches,actions,unknownTypes:[...unknownTypes],sourceName:combined.name,sourceDate:combined.created_at};
    s.dashboardCache=data;s.dashboardDatasetId=combined.id;s.dashboardActions=actions;
   }catch(error){
    host.innerHTML='<article class="exec-status"><b>Не удалось рассчитать показатели</b><p>'+esc(error.message||String(error))+'</p><button class="ghost" type="button" data-dashboard-go="analytics">Открыть аналитику</button></article>';
@@ -466,7 +469,7 @@ async function renderExecutiveDashboard(){
   (stale?'<article class="exec-warning"><b>Появились новые исходные файлы после последнего анализа.</b><p>Показатели ниже относятся к предыдущему аналитическому набору. Пересчитайте, чтобы включить новые загрузки.</p><button class="primary" type="button" data-dashboard-rebuild>Пересчитать анализ</button></article>':'')+
   '<div class="exec-kpis">'+
    metric("Выручка пиццерий",rub(data.sales),"Продажи "+(data.salesPeriods.join(", ")||"период не подтверждён"))+
-   metric("Валовая прибыль",rub(data.grossProfit),"По строкам отчёта о продажах")+
+   metric("Валовая прибыль",data.grossProfit===null?"—":rub(data.grossProfit),data.grossProfit===null?"Поле отсутствует в загруженном наборе":"По строкам отчёта о продажах")+
    metric("Закупки пиццерий",rub(data.purchases),data.purchaseRows.toLocaleString("ru-RU")+" строк; период подтвердить")+
    metric("Порча",rub(data.spoilage),data.spoilRows.toLocaleString("ru-RU")+" строк; предварительная оценка")+
    metric("Недостачи",rub(data.shortages),"Отдельно от излишков")+
