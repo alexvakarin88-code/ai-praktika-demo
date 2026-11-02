@@ -130,6 +130,22 @@ function renderAnalyticsHome(){
  const typeSummary=Object.entries(typeCounts).map(([k,v])=>esc(k)+": "+v).join(" · ");
  const readyHtml=ready.map(x=>'<article class="item"><div class="bar"><b>'+esc(x.name)+'</b><span class="tag done">Готово к анализу</span></div><p>'+Number(x.row_count||0).toLocaleString("ru-RU")+' строк · '+date(x.created_at)+'</p><button class="primary" type="button" data-analyze-dataset="'+esc(x.id)+'">Открыть анализ →</button></article>').join("");
  const rawHtml=raw.map(x=>'<article class="item"><div class="bar"><b>'+esc(x.name)+'</b><span class="tag">'+esc(detectReportType(x.columns))+'</span></div><p>'+Number(x.row_count||0).toLocaleString("ru-RU")+' строк · '+date(x.created_at)+'</p></article>').join("");
+ const unsupportedHtml=unsupported.map(x=>{
+  const columns=Array.isArray(x.columns)?x.columns:[];
+  const normalized=new Set(columns.map(normalizedHeader));
+  const isCatalog=normalized.has("номенклатура")&&normalized.has("количество в ед. изм.")&&(normalized.has("себестоимость за ед., р.")||normalized.has("учетная себестоимость, р."));
+  const isTest=normalizedHeader(x.name||"").includes("тест")||normalizedHeader(x.notes||"").includes("тест");
+  const reason=isCatalog
+   ?"Похоже на общую товарную ведомость / справочник номенклатуры. В ней нет надёжной разбивки по отдельным пиццериям, поэтому её правильно хранить отдельно и не включать в расчёт закупок или продаж."
+   :isTest
+   ?"По названию это похоже на тестовый набор. Он не включён в расчёт, пока не подтверждено, что это рабочий отчёт и какой именно."
+   :"Заголовки столбцов пока не совпали с шаблонами закупок, продаж, порчи или инвентаризационных расхождений. Данные сохранены, но в расчётах не участвуют.";
+  const preview=columns.length?columns.slice(0,12).map(esc).join(" · ")+(columns.length>12?" · … ещё "+(columns.length-12):""):"Названия столбцов не сохранены";
+  return '<article class="item"><div class="bar"><b>'+esc(x.name||"Без названия")+'</b><span class="tag">Нужна проверка</span></div>'+
+   '<p>'+Number(x.row_count||0).toLocaleString("ru-RU")+' строк · '+date(x.created_at)+(x.source_file_name?' · файл: '+esc(x.source_file_name):"")+'</p>'+
+   '<p>'+reason+'</p><small>Столбцы: '+preview+'</small>'+
+   '<div class="bar" style="justify-content:flex-start;margin-top:8px"><button class="ghost" type="button" data-open-unrecognized="'+esc(x.id)+'">Открыть таблицу</button><button class="ghost" type="button" data-go-data>Управление набором</button></div></article>';
+ }).join("");
  const noData=complete.length===0?'<div class="empty-state"><h3>Пока нет загруженных данных</h3><p>Сначала добавьте Excel-отчёты в разделе «Данные». После загрузки вернитесь сюда — система сможет объединить поддерживаемые отчёты и построить аналитику.</p><button class="primary" type="button" data-go-data>Перейти к загрузке данных</button></div>':
   raw.length===0&&ready.length===0?'<div class="empty-state"><h3>Не нашёл подходящих отчётов</h3><p>В хранилище есть '+complete.length+' наборов, но по названиям столбцов программа пока не распознаёт их как закупки, продажи, порчу или инвентаризацию. Откройте раздел «Данные» и проверьте состав таблиц.</p><button class="ghost" type="button" data-go-data>Проверить загруженные файлы</button></div>':"";
  content.innerHTML=
@@ -139,11 +155,12 @@ function renderAnalyticsHome(){
    (ready.length?'<section class="card"><h3>Готовые аналитические наборы</h3>'+readyHtml+'</section>':"")+
    (raw.length?'<section class="card"><div class="bar"><div><h3>Исходные Excel-отчёты</h3><p class="muted">'+(typeSummary||"")+'</p></div><button class="primary" type="button" data-build-analysis '+(!s.schemaReady?'disabled':'')+'>Сформировать анализ из этих файлов</button></div><p class="muted">Система объединит закупки, продажи, порчу и инвентаризационные расхождения. Исходные наборы останутся без изменений.</p>'+rawHtml+(!s.schemaReady?'<p class="error">Для объединения нужно обновить структуру базы данных: выполните миграцию 002 в Supabase SQL Editor.</p>':"")+'</section>':"")+
    noData+
-   (unsupported.length?'<details class="card"><summary>Не распознано автоматически: '+unsupported.length+' наборов</summary><p class="muted">Проверьте заголовки столбцов в разделе «Данные». Нераспознанные наборы не включаются в расчёт.</p></details>':"")+
+   (unsupported.length?'<section class="card"><h3>Нужно разобрать: '+unsupported.length+' наборов</h3><p class="muted">Это не означает, что файлы повреждены. Программа пока не знает их тип по заголовкам столбцов. Ниже показаны названия, размеры и сами заголовки. Нераспознанные наборы не попадают в показатели руководителя.</p>'+unsupportedHtml+'</section>':"")+
   '</div>';
  loading.classList.add("hidden");content.classList.remove("hidden");
  content.onclick=e=>{
   const a=e.target.closest("[data-analyze-dataset]");if(a){openAnalytics(a.dataset.analyzeDataset);return}
+  const view=e.target.closest("[data-open-unrecognized]");if(view){openDataset(view.dataset.openUnrecognized);return}
   if(e.target.closest("[data-build-analysis]")){buildCombinedDataset();return}
   if(e.target.closest("[data-go-data]"))page("data");
  };
