@@ -188,7 +188,7 @@ async function buildCombinedDataset(options={}){
     if(!r||typeof r!=="object")continue;
     const item=String(firstField(r,["Товар","Позиция продажи","Позиция","Элемент номенклатуры","Блюдо / заготовка"],"")).trim();
     const rowSku=firstField(r,["Артикул","Артикул товара","Артикул блюда / заготовки"],"");
-    if(/^итого\b/i.test(item)||(!item&&!String(rowSku??"").trim()))continue;
+    if(/^итого(?:\s|:|$)/i.test(item)||(!item&&!String(rowSku??"").trim()))continue;
     const sourceName=String(firstField(r,["Исходный файл","Файл"],source)||source||ds.name);
     const point=String(firstField(r,["Точка","Подразделение"],pointFromName)||"Не указано").trim()||"Не указано";
     let type,name,quantity,unit,amount,operation,sku,warehouse="",grossProfit=0,unitPrice=0;
