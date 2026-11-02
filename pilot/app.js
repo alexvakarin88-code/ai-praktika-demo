@@ -116,7 +116,7 @@ function pointFromSource(source,datasetName=""){
   ["ПРЦ",["прц"]]
  ];
  for(const [point,aliases] of points){if(aliases.some(alias=>text.includes(alias)))return point}
- return "Не указано";
+ return "Сводный отчёт";
 }
 function renderAnalyticsHome(){
  const loading=$("analyticsLoading"),content=$("analyticsContent");
@@ -280,11 +280,11 @@ async function openAnalytics(id){
   const byPoint=new Map();
   const getPoint=name=>{if(!byPoint.has(name))byPoint.set(name,{point:name,purchases:0,sales:0,spoilage:0,shortages:0,surpluses:0,purchaseRows:0,salesRows:0,spoilageRows:0});return byPoint.get(name)};
   const topSpoil=new Map();
-  let purchaseRows=0,salesRows=0,spoilRows=0,varianceRows=0,zeroQtyWithAmount=0,unknownPointRows=0;
+  let purchaseRows=0,salesRows=0,spoilRows=0,varianceRows=0,zeroQtyWithAmount=0,unknownPointRows=0,unassignedRows=0;
   for(const row of all){
    const type=String(row["Тип отчёта"]||"");
    const point=String(row["Подразделение"]||"Не указано");
-   if(point==="Не указано")unknownPointRows++;
+   if(point==="Не указано")unknownPointRows++;if(point==="Сводный отчёт")unassignedRows++;
    const item=String(row["Наименование"]||"Без названия");
    const metric=numeric(row,"Показатель для анализа, ₽");
    const amount=numeric(row,"Сумма в отчёте, ₽");
@@ -304,7 +304,7 @@ async function openAnalytics(id){
     if(String(row["Вид операции"]).includes("Излишки"))g.surpluses+=Math.abs(amount);
    }
   }
-  const retail=[...byPoint.values()].filter(x=>x.point!=="ПРЦ"&&x.point!=="Не указано");
+  const retail=[...byPoint.values()].filter(x=>x.point!=="ПРЦ"&&x.point!=="Не указано"&&x.point!=="Сводный отчёт");
   const prc=byPoint.get("ПРЦ");
   const sum=(key)=>retail.reduce((n,x)=>n+x[key],0);
   const spoilSorted=[...topSpoil.values()].sort((a,b)=>b.amount-a.amount).slice(0,10);
@@ -323,6 +323,7 @@ async function openAnalytics(id){
   if(zeroQtyWithAmount>0)actions.push({level:"Средний",title:"Проверить качество отчёта о порче",text:zeroQtyWithAmount+" строк имеют денежную сумму при нулевом количестве. До проверки не использовать их для расчёта количественных норм."});
   if(missing>0)actions.push({level:"Средний",title:"Дополнить покрытие сети",text:"В данных "+pizzeriaCount+" пиццерий при заявленных 19. Не хватает отчётов ещё по "+missing+" точкам."});
   if(unknownPointRows>0)actions.push({level:"Высокий",title:"Уточнить привязку строк к пиццериям",text:unknownPointRows+" строк не удалось отнести к конкретной точке. Проверьте имена исходных файлов."});
+   if(unassignedRows>0)actions.push({level:"Средний",title:"Отдельно проверить сводные отчёты без разбивки по точкам",description:"В наборе "+unassignedRows.toLocaleString("ru-RU")+" строк из файлов без названия пиццерии. Они не включены в суммы по отдельным точкам, чтобы не задвоить сетевые итоги."});
   const salesPeriods=[...new Set(all.filter(row=>row["Тип отчёта"]==="Продажи блюд").map(row=>String(row["Период отчёта"]||"").trim()).filter(x=>x&&!x.startsWith("Не подтверждён")))];
   actions.push({level:"Средний",title:"Подтвердить периоды отчётов",text:"Период продаж: "+(salesPeriods.join(", ")||"не указан")+". Для закупок, порчи и инвентаризации период следует подтвердить в исходных отчётах iiko."});
   const actionHtml=actions.map(a=>'<article class="action-card"><span class="tag '+(a.level==="Высокий"?"high":"normal")+'">'+a.level+'</span><b>'+esc(a.title)+'</b><p>'+esc(a.text)+'</p></article>').join("");
@@ -441,7 +442,7 @@ async function renderExecutiveDashboard(){
    if(missingPoints>0)actions.push({level:"Средний",title:"Дополнить покрытие сети",description:"В текущем наборе "+pizzeriaCount+" пиццерий из 19. Не хватает отчётов ещё по "+missingPoints+" точкам; их названия нужно подтвердить."});
    if(!periodsConfirmed||rows.some(r=>["Закупки","Порча","Инвентаризационные расхождения"].includes(r["Тип отчёта"])&&String(r["Период отчёта"]||"").startsWith("Не подтверждён")))actions.push({level:"Средний",title:"Подтвердить периоды отчётов",description:"Продажи: "+([...salesPeriods].join(", ")||"период не указан")+". Периоды закупок, порчи и инвентаризации нужно подтвердить в настройках отчётов iiko, прежде чем сравнивать их напрямую."});
    if(unknownPointRows>0)actions.push({level:"Высокий",title:"Уточнить привязку строк к пиццериям",description:unknownPointRows.toLocaleString("ru-RU")+" строк не удалось отнести к конкретной точке. Проверьте имена исходных файлов и названия подразделений."});
-   data={rows:rows.length,purchases:sumRetail("purchases"),sales:sumRetail("sales"),grossProfit:sumRetail("grossProfit"),spoilage:sumRetail("spoilage"),shortages:sumRetail("shortages"),surpluses:sumRetail("surpluses"),pizzeriaCount,missingPoints,unknownPointRows,zeroQtyWithAmount,purchaseRows,salesRows,spoilRows,inventoryRows,salesPeriods:[...salesPeriods],top,branches,actions,unknownTypes:[...unknownTypes],sourceName:combined.name,sourceDate:combined.created_at};
+   data={rows:rows.length,purchases:sumRetail("purchases"),sales:sumRetail("sales"),grossProfit:sumRetail("grossProfit"),spoilage:sumRetail("spoilage"),shortages:sumRetail("shortages"),surpluses:sumRetail("surpluses"),pizzeriaCount,missingPoints,unknownPointRows,unassignedRows,zeroQtyWithAmount,purchaseRows,salesRows,spoilRows,inventoryRows,salesPeriods:[...salesPeriods],top,branches,actions,unknownTypes:[...unknownTypes],sourceName:combined.name,sourceDate:combined.created_at};
    s.dashboardCache=data;s.dashboardDatasetId=combined.id;s.dashboardActions=actions;
   }catch(error){
    host.innerHTML='<article class="exec-status"><b>Не удалось рассчитать показатели</b><p>'+esc(error.message||String(error))+'</p><button class="ghost" type="button" data-dashboard-go="analytics">Открыть аналитику</button></article>';
@@ -477,7 +478,7 @@ async function renderExecutiveDashboard(){
     '<li>Продажи: '+(data.salesPeriods.join(", ")||"период не указан")+'</li>'+
     '<li>Периоды закупок, порчи и инвентаризации требуют подтверждения</li>'+
     '<li>Строк порчи с нулевым количеством и суммой: '+data.zeroQtyWithAmount.toLocaleString("ru-RU")+'</li>'+
-    '<li>Отчёты по пиццериям: '+data.pizzeriaCount+' из 19; ПРЦ учитывается отдельно</li>'+
+    '<li>Отчёты по пиццериям: '+data.pizzeriaCount+' из 19; ПРЦ учитывается отдельно</li>'+\n    '<li>Сводные строки без разбивки по точкам: '+data.unassignedRows.toLocaleString("ru-RU")+'; не включены в суммы пиццерий</li>'+
     '<li>Недостачи и излишки не взаимозачитываются</li>'+
    '</ul><p class="exec-footnote">Рекомендации — сигналы для проверки. Платформа не оформляет и не отправляет заказы поставщикам автоматически.</p></section>'+
   '</div>'+
