@@ -1,2 +1,7 @@
-// Supabase public client configuration. Never place service_role keys or database passwords here.
-window.APP_CONFIG={supabaseUrl:"",supabaseAnonKey:"",workspaceId:"69712628-f527-4642-a18d-a80e5269d794"};
+// Supabase public client configuration.
+// The publishable key is intended for browser use; database access is protected by RLS.
+window.APP_CONFIG={
+  supabaseUrl:"https://ajjsnnpsaskjvtxmasdn.supabase.co",
+  supabaseAnonKey:"sb_publishable_vZ0yZqiwx0T0ZtHEW38T0A_BE1-i8ii",
+  workspaceId:"69712628-f527-4642-a18d-a80e5269d794"
+};
