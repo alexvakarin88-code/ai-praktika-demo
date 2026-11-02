@@ -11,7 +11,8 @@ function isBlank(value) {
   return value === "" || value === null || value === undefined;
 }
 function getCell(sheet, rowIndex, columnIndex) {
-  const denseRow = sheet[rowIndex];
+  const denseData = sheet["!data"] || sheet;
+  const denseRow = denseData[rowIndex];
   if (Array.isArray(denseRow)) return denseRow[columnIndex];
   return sheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })];
 }
