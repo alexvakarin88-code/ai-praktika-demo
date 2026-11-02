@@ -1,4 +1,4 @@
-(()=>{const c=window.APP_CONFIG||{},$=id=>document.getElementById(id),s={db:null,user:null,role:null,wid:null,tasks:[],datasets:[],feedback:[],history:[],filter:"all",schemaReady:false,resumeDatasetId:null,datasetViewer:null,analyticsRows:null};const labels={open:"Новая",progress:"В работе",done:"Решена"},types={bug:"Ошибка",confusing:"Непонятно",idea:"Идея",positive:"Полезно"},esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),date=x=>x?new Date(x).toLocaleString("ru-RU"):"";function toast(t){$("toast").textContent=t;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3000)}function page(p){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+p).classList.add("active");document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===p));$("pageTitle").textContent=({overview:"Обзор",tasks:"Задачи",data:"Данные",analytics:"Аналитика",feedback:"Обратная связь",history:"История"})[p];if(p==="analytics")renderAnalyticsHome()}async function log(event,summary){let r=await s.db.from("activity_log").insert({workspace_id:s.wid,actor_id:s.user.id,event_type:event,details:{summary}});if(r.error)console.warn(r.error.message)}async function membership(){let r=await s.db.from("workspace_members").select("workspace_id,role").eq("workspace_id",c.workspaceId).eq("user_id",s.user.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("Для этого аккаунта не выдан доступ. Обратитесь к владельцу пилота.");s.role=r.data.role;s.wid=r.data.workspace_id}function taskCard(t){return '<article class="item"><div class="bar"><b>'+esc(t.title)+'</b><span class="tag '+t.status+'">'+labels[t.status]+'</span></div><p>'+esc(t.description||"Описание не добавлено")+'</p>'+(t.last_comment?'<p><b>Комментарий:</b> '+esc(t.last_comment)+'</p>':'')+'<small>'+date(t.updated_at)+'</small><div class="bar" style="justify-content:flex-start;margin-top:8px"><button class="ghost" data-edit="'+t.id+'">Открыть / изменить</button>'+(s.role==="owner"?'<button class="ghost" data-delete="'+t.id+'">Удалить</button>':'')+'</div></article>'}function historyCard(x){return '<article class="item"><b>'+esc(x.event_type)+'</b><p>'+esc(x.details?.summary||"")+'</p><small>'+date(x.created_at)+'</small></article>'}function datasetCard(x){
+(()=>{const c=window.APP_CONFIG||{},$=id=>document.getElementById(id),s={db:null,user:null,role:null,wid:null,tasks:[],datasets:[],feedback:[],history:[],filter:"all",schemaReady:false,resumeDatasetId:null,datasetViewer:null,analyticsRows:null,dashboardActions:[],dashboardDatasetId:null,dashboardCache:null,autoBuilding:false,autoBuildAttempted:false,dashboardError:null};const labels={open:"Новая",progress:"В работе",done:"Решена"},types={bug:"Ошибка",confusing:"Непонятно",idea:"Идея",positive:"Полезно"},esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),date=x=>x?new Date(x).toLocaleString("ru-RU"):"";function toast(t){$("toast").textContent=t;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3000)}function page(p){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("page-"+p).classList.add("active");document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===p));$("pageTitle").textContent=({overview:"Обзор",tasks:"Задачи",data:"Данные",analytics:"Аналитика",feedback:"Обратная связь",history:"История"})[p];if(p==="analytics")renderAnalyticsHome()}async function log(event,summary){let r=await s.db.from("activity_log").insert({workspace_id:s.wid,actor_id:s.user.id,event_type:event,details:{summary}});if(r.error)console.warn(r.error.message)}async function membership(){let r=await s.db.from("workspace_members").select("workspace_id,role").eq("workspace_id",c.workspaceId).eq("user_id",s.user.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("Для этого аккаунта не выдан доступ. Обратитесь к владельцу пилота.");s.role=r.data.role;s.wid=r.data.workspace_id}function taskCard(t){return '<article class="item"><div class="bar"><b>'+esc(t.title)+'</b><span class="tag '+t.status+'">'+labels[t.status]+'</span></div><p>'+esc(t.description||"Описание не добавлено")+'</p>'+(t.last_comment?'<p><b>Комментарий:</b> '+esc(t.last_comment)+'</p>':'')+'<small>'+date(t.updated_at)+'</small><div class="bar" style="justify-content:flex-start;margin-top:8px"><button class="ghost" data-edit="'+t.id+'">Открыть / изменить</button>'+(s.role==="owner"?'<button class="ghost" data-delete="'+t.id+'">Удалить</button>':'')+'</div></article>'}function historyCard(x){return '<article class="item"><b>'+esc(x.event_type)+'</b><p>'+esc(x.details?.summary||"")+'</p><small>'+date(x.created_at)+'</small></article>'}function datasetCard(x){
  const status=x.upload_status||"complete",done=status==="complete";
  const actual=Number(x.stored_row_count||0),expected=Number(x.row_count||0);
  const statusText=done?"Завершено":x.source_file_hash?"Загрузка прервана — можно продолжить":"Нужна повторная загрузка";
@@ -78,14 +78,45 @@ async function moveDatasetPage(direction){
 }
 function rub(value){return new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB",maximumFractionDigits:0}).format(Number(value)||0)}
 function numeric(row,key){const value=Number(row?.[key]);return Number.isFinite(value)?value:0}
+function normalizedHeader(value){
+ return String(value??"").trim().toLowerCase().replace(/ё/g,"е").replace(/\\s+/g," ");
+}
 function detectReportType(columns){
- const c=new Set(Array.isArray(columns)?columns:[]);
- if(c.has("Тип отчёта")&&c.has("Подразделение")&&c.has("Показатель для анализа, ₽"))return "combined";
- if(c.has("Позиция продажи")&&c.has("Выручка"))return "Продажи";
- if(c.has("Количество порчи")&&c.has("Сумма"))return "Порча";
- if(c.has("Тип расхождения")&&c.has("Сумма"))return "Инвентаризация";
- if(c.has("Товар")&&c.has("Количество")&&c.has("Цена")&&c.has("Сумма"))return "Закупки";
+ const c=new Set((Array.isArray(columns)?columns:[]).map(normalizedHeader));
+ const has=(...names)=>names.some(name=>c.has(normalizedHeader(name)));
+ if(has("Тип отчёта","Тип отчета")&&has("Подразделение")&&has("Показатель для анализа, ₽"))return "combined";
+ if((has("Позиция продажи")&&has("Выручка"))||(has("Элемент номенклатуры")&&has("Выручка, р.")))return "Продажи";
+ if((has("Количество порчи")&&has("Сумма"))||(has("Кол-во блюда")&&has("Блюдо / заготовка")&&has("Сумма")))return "Порча";
+ if((has("Тип расхождения")&&has("Сумма"))||(has("Корр. счет / склад")&&has("Сумма, р.")))return "Инвентаризация";
+ if((has("Товар")&&has("Количество")&&has("Цена")&&has("Сумма"))||(has("Артикул товара")&&has("Кол-во товара")&&has("Сумма, р.")))return "Закупки";
  return null;
+}
+function firstField(row,names,fallback=""){
+ for(const name of names){const value=row?.[name];if(value!==undefined&&value!==null&&String(value).trim()!=="")return value}
+ return fallback;
+}
+function pointFromSource(source,datasetName=""){
+ const text=normalizedHeader(String(source||"")+" "+String(datasetName||""));
+ const points=[
+  ["Берёзовый",["березовый","берез"]],
+  ["Шелехов",["шелехов","шел"]],
+  ["Лермонтова",["лермонтова","лерм"]],
+  ["Братск",["братск"]],
+  ["Синюшка",["синюшка","син"]],
+  ["Атриум",["атриум"]],
+  ["Евро",["евро"]],
+  ["Ленина",["ленина"]],
+  ["Школа",["школа"]],
+  ["Союз",["союз"]],
+  ["Баум",["баум"]],
+  ["Авиа",["авиа"]],
+  ["6-ая",["6-ая","6 ая"]],
+  ["ББ",["бб"]],
+  ["КК",["кк"]],
+  ["ПРЦ",["прц"]]
+ ];
+ for(const [point,aliases] of points){if(aliases.some(alias=>text.includes(alias)))return point}
+ return "Не указано";
 }
 function renderAnalyticsHome(){
  const loading=$("analyticsLoading"),content=$("analyticsContent");
@@ -134,46 +165,74 @@ function reportPeriod(source){
  const m=String(source||"").match(/с\s*(\d{2}\.\d{2}\.\d{4})\s*по\s*(\d{2}\.\d{2}\.\d{4})/i);
  return m?m[1]+"–"+m[2]:"Не подтверждён — уточнить в iiko";
 }
-async function buildCombinedDataset(){
+async function buildCombinedDataset(options={}){
  if(!s.schemaReady){toast("Сначала нужно обновить структуру базы данных (миграция 002).");return}
  const loading=$("analyticsLoading"),content=$("analyticsContent");
- loading.classList.remove("hidden");content.classList.add("hidden");
- loading.textContent="Проверяю загруженные отчёты…";
- const canonical=["Тип отчёта","Подразделение","Артикул","Наименование","Количество","Единица измерения","Показатель для анализа, ₽","Сумма в отчёте, ₽","Выручка, ₽","Вид операции","Период отчёта","Исходный файл","Склад"];
+ if(loading&&content){loading.classList.remove("hidden");content.classList.add("hidden");loading.textContent="Проверяю загруженные отчёты…"}
+ const canonical=["Тип отчёта","Подразделение","Артикул","Наименование","Количество","Единица измерения","Показатель для анализа, ₽","Сумма в отчёте, ₽","Выручка, ₽","Валовая прибыль, ₽","Цена за ед., ₽","Вид операции","Период отчёта","Исходный файл","Склад"];
  let createdId=null;
+ if(options.auto)s.autoBuilding=true;
  try{
   const sourceSets=s.datasets.filter(x=>(x.upload_status||"complete")==="complete"&&["Закупки","Продажи","Порча","Инвентаризация"].includes(detectReportType(x.columns)));
-  if(!sourceSets.length)throw new Error("Нет завершённых Excel-наборов, распознанных как закупки, продажи, порча или инвентаризация.");
-  const rows=[],seenHashes=new Set();
+  if(!sourceSets.length)throw new Error("Нет завершённых отчётов, распознанных как закупки, продажи, порча или инвентаризация.");
+  const rows=[],seenHashes=new Set();let processedSources=0;
   for(let i=0;i<sourceSets.length;i++){
    const ds=sourceSets[i],kind=detectReportType(ds.columns);
    if(ds.source_file_hash&&seenHashes.has(ds.source_file_hash))continue;
    if(ds.source_file_hash)seenHashes.add(ds.source_file_hash);
-   loading.textContent="Читаю отчёт "+(i+1)+" из "+sourceSets.length+": "+ds.name;
-   const sourceRows=await readAllDatasetRows(ds);
+   const source=String(ds.source_file_name||ds.name||"");
+   const pointFromName=pointFromSource(source,ds.name);
+   if(loading&&!options.auto)loading.textContent="Читаю отчёт "+(i+1)+" из "+sourceSets.length+": "+ds.name;
+   const sourceRows=await readAllDatasetRows(ds);processedSources++;
    for(const r of sourceRows){
     if(!r||typeof r!=="object")continue;
-    const item=String(r["Товар"]??r["Позиция продажи"]??r["Позиция"]??"").trim();
-    if(/^итого\b/i.test(item))continue;
-    const source=String(r["Исходный файл"]??r["Файл"]??ds.source_file_name??ds.name);
-    const point=String(r["Точка"]??"Не указано").trim()||"Не указано";
-    let type,name,quantity,unit,amount,operation,sku,warehouse="";
+    const item=String(firstField(r,["Товар","Позиция продажи","Позиция","Элемент номенклатуры","Блюдо / заготовка"],"")).trim();
+    if(/^итого\\b/i.test(item))continue;
+    const sourceName=String(firstField(r,["Исходный файл","Файл"],source)||source||ds.name);
+    const point=String(firstField(r,["Точка","Подразделение"],pointFromName)||"Не указано").trim()||"Не указано";
+    let type,name,quantity,unit,amount,operation,sku,warehouse="",grossProfit=0,unitPrice=0;
     if(kind==="Закупки"){
-     type="Закупки";name=String(r["Товар"]??"Без названия");quantity=toNumber(r["Количество"]);unit=String(r["Единица измерения"]??"");amount=toNumber(r["Сумма"]);operation="Закупка";sku=String(r["Артикул"]??"");
+     type="Закупки";
+     name=String(firstField(r,["Товар","Наименование"],"Без названия"));
+     quantity=toNumber(firstField(r,["Количество","Кол-во товара"],0));
+     unit=String(firstField(r,["Единица измерения","Ед. изм."],""));
+     amount=toNumber(firstField(r,["Сумма","Сумма, р.","Сумма, ₽"],0));
+     unitPrice=toNumber(firstField(r,["Цена","Стоимость ед. товара, р.","Стоимость ед. товара, ₽"],0));
+     operation="Закупка";
+     sku=String(firstField(r,["Артикул","Артикул товара"],""));
     }else if(kind==="Продажи"){
-     type="Продажи блюд";name=String(r["Позиция продажи"]??"Без названия");quantity=toNumber(r["Количество"]);unit="";amount=toNumber(r["Выручка"]);operation="Продажа блюда";sku="";
+     type="Продажи блюд";
+     name=String(firstField(r,["Позиция продажи","Элемент номенклатуры","Позиция"],"Без названия"));
+     quantity=toNumber(firstField(r,["Количество","Кол-во"],0));
+     unit="";
+     amount=toNumber(firstField(r,["Выручка","Выручка, р.","Выручка, ₽"],0));
+     grossProfit=toNumber(firstField(r,["Валовая прибыль","Валовая прибыль, р.","Валовая прибыль, ₽"],0));
+     operation="Продажа блюда";
+     sku="";
     }else if(kind==="Порча"){
-     type="Порча";name=String(r["Позиция"]??"Без названия");quantity=Math.abs(toNumber(r["Количество порчи"]));unit=String(r["Ед. изм."]??"");amount=toNumber(r["Сумма"]);operation="Порча";sku=String(r["Артикул"]??"");
+     type="Порча";
+     name=String(firstField(r,["Позиция","Блюдо / заготовка","Товар"],"Без названия"));
+     quantity=Math.abs(toNumber(firstField(r,["Количество порчи","Кол-во блюда","Количество"],0)));
+     unit=String(firstField(r,["Ед. изм.","Единица измерения блюда/заготовки","Единица измерения"],""));
+     amount=toNumber(firstField(r,["Сумма","Сумма, р.","Сумма, ₽"],0));
+     operation="Порча";
+     sku=String(firstField(r,["Артикул","Артикул блюда / заготовки","Артикул товара"],""));
     }else{
-     type="Инвентаризационные расхождения";name=String(r["Товар"]??"Без названия");quantity=toNumber(r["Количество"]);unit=String(r["Единица измерения"]??"");amount=toNumber(r["Сумма"]);operation=String(r["Тип расхождения"]??"Не указано");sku=String(r["Артикул"]??"");warehouse=String(r["Склад"]??"");
+     type="Инвентаризационные расхождения";
+     name=String(firstField(r,["Товар","Наименование"],"Без названия"));
+     quantity=toNumber(firstField(r,["Количество","Кол-во товара"],0));
+     unit=String(firstField(r,["Единица измерения","Ед. изм."],""));
+     amount=toNumber(firstField(r,["Сумма","Сумма, р.","Сумма, ₽"],0));
+     operation=String(firstField(r,["Тип расхождения","Корр. счет / склад"],"Не указано"));
+     sku=String(firstField(r,["Артикул","Артикул товара"],""));
+     warehouse=String(firstField(r,["Склад"],""));
     }
-    const metric=Math.abs(amount);
-    rows.push({"Тип отчёта":type,"Подразделение":point,"Артикул":sku,"Наименование":name,"Количество":quantity,"Единица измерения":unit,"Показатель для анализа, ₽":metric,"Сумма в отчёте, ₽":amount,"Выручка, ₽":type==="Продажи блюд"?amount:0,"Вид операции":operation,"Период отчёта":reportPeriod(source),"Исходный файл":source,"Склад":warehouse});
+    rows.push({"Тип отчёта":type,"Подразделение":point,"Артикул":sku,"Наименование":name,"Количество":quantity,"Единица измерения":unit,"Показатель для анализа, ₽":Math.abs(amount),"Сумма в отчёте, ₽":amount,"Выручка, ₽":type==="Продажи блюд"?amount:0,"Валовая прибыль, ₽":grossProfit,"Цена за ед., ₽":unitPrice,"Вид операции":operation,"Период отчёта":reportPeriod(sourceName),"Исходный файл":sourceName,"Склад":warehouse});
    }
   }
-  if(!rows.length)throw new Error("Отчёты распознаны, но в них не оказалось строк с данными.");
+  if(!rows.length)throw new Error("Отчёты распознаны, но после исключения итоговых строк не осталось данных.");
   const name="Автоанализ — "+new Date().toLocaleDateString("ru-RU");
-  const created=await s.db.from("datasets").insert({workspace_id:s.wid,name,notes:"Автоматически объединено из "+sourceSets.length+" исходных Excel-наборов. Исходные файлы не изменялись.",row_count:rows.length,columns:canonical,rows:[],uploaded_by:s.user.id,upload_status:"uploading",upload_error:null,stored_row_count:0,stored_chunks:0,source_file_name:"Автоматическое объединение Excel",source_file_size:0,source_file_last_modified:Date.now(),upload_started_at:new Date().toISOString()}).select("id").single();
+  const created=await s.db.from("datasets").insert({workspace_id:s.wid,name,notes:"Автоматически объединено из "+processedSources+" исходных Excel-наборов. Итоговые строки отчётов исключены; подразделение определено по имени файла, если его нет в строках. Исходные наборы не изменялись.",row_count:rows.length,columns:canonical,rows:[],uploaded_by:s.user.id,upload_status:"uploading",upload_error:null,stored_row_count:0,stored_chunks:0,source_file_name:"Автоматическое объединение Excel",source_file_size:0,source_file_last_modified:Date.now(),upload_started_at:new Date().toISOString()}).select("id").single();
   if(created.error)throw created.error;
   createdId=created.data.id;
   const batchSize=400,total=Math.ceil(rows.length/batchSize);
@@ -181,19 +240,28 @@ async function buildCombinedDataset(){
    const batch=rows.slice(start,start+batchSize);
    const saved=await s.db.from("dataset_rows").insert({dataset_id:createdId,workspace_id:s.wid,chunk_index:chunkIndex,rows:batch,uploaded_by:s.user.id});
    if(saved.error)throw saved.error;
-   loading.textContent="Сохраняю объединённый набор: пакет "+(chunkIndex+1)+" из "+total+" · "+Math.min(start+batch.length,rows.length).toLocaleString("ru-RU")+" из "+rows.length.toLocaleString("ru-RU")+" строк";
+   if(loading&&!options.auto)loading.textContent="Сохраняю объединённый набор: пакет "+(chunkIndex+1)+" из "+total+" · "+Math.min(start+batch.length,rows.length).toLocaleString("ru-RU")+" из "+rows.length.toLocaleString("ru-RU")+" строк";
   }
   const finished=await s.db.from("datasets").update({upload_status:"complete",upload_error:null,upload_completed_at:new Date().toISOString()}).eq("id",createdId).eq("workspace_id",s.wid);
   if(finished.error)throw finished.error;
-  await log("Сформирован объединённый аналитический набор",name+" · "+rows.length+" строк · "+sourceSets.length+" исходных наборов");
-  await refresh();
-  const ready=s.datasets.find(x=>x.id===createdId);
-  if(!ready)throw new Error("Набор сохранён, но не появился в списке. Нажмите «Обновить» в разделе «Данные».");
-  await openAnalytics(createdId);
+  await log("Сформирован объединённый аналитический набор",name+" · "+rows.length+" строк · "+processedSources+" исходных наборов");
+  s.dashboardError=null;
+  await refresh({skipDashboard:true});
+  s.autoBuilding=false;
+  if(options.auto){
+   await renderExecutiveDashboard();
+   toast("Аналитика подготовлена автоматически");
+  }else{
+   const ready=s.datasets.find(x=>x.id===createdId);
+   if(!ready)throw new Error("Набор сохранён, но не появился в списке. Нажмите «Обновить» в разделе «Данные».");
+   await openAnalytics(createdId);
+  }
  }catch(error){
+  s.autoBuilding=false;
   if(createdId)await s.db.from("datasets").update({upload_status:"interrupted",upload_error:String(error?.message||error)}).eq("id",createdId).eq("workspace_id",s.wid);
-  loading.textContent="Не удалось сформировать аналитику: "+(error.message||String(error))+". Исходные Excel-файлы не удалены и не изменены.";
-  content.classList.add("hidden");loading.classList.remove("hidden");
+  s.dashboardError=String(error?.message||error);
+  if(options.auto){await renderExecutiveDashboard()}
+  else if(loading){loading.textContent="Не удалось сформировать аналитику: "+(error.message||String(error))+". Исходные Excel-файлы не удалены и не изменены.";content.classList.add("hidden");loading.classList.remove("hidden")}
  }
 }
 async function openAnalytics(id){
@@ -294,6 +362,145 @@ async function deleteDataset(id,button){
  try{await refresh();toast("Набор удалён вместе со всеми сохранёнными строками.")}
  catch(error){toast("Набор удалён, но список не обновился. Нажмите «Обновить».")}
 }
+async function renderExecutiveDashboard(){
+ const host=$("executiveDashboard");if(!host)return;
+ const complete=s.datasets.filter(x=>(x.upload_status||"complete")==="complete");
+ const combined=complete.filter(x=>detectReportType(x.columns)==="combined").sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||"")))[0];
+ const raw=complete.filter(x=>["Закупки","Продажи","Порча","Инвентаризация"].includes(detectReportType(x.columns)));
+ const present=new Set(raw.map(x=>detectReportType(x.columns)));
+ const required=[["Продажи","Продажи блюд"],["Закупки","Закупки"],["Порча","Порча"],["Недостачи и излишки","Инвентаризация"]];
+ const missing=required.filter(([label,type])=>!present.has(type)).map(x=>x[0]);
+ if(!combined){
+  if(missing.length===0&&!s.autoBuildAttempted&&!s.autoBuilding){
+   s.autoBuildAttempted=true;s.autoBuilding=true;
+   host.innerHTML='<article class="exec-status"><b>Подготавливаю аналитику из загруженных отчётов…</b><p>Обнаружены все четыре типа отчётов. Объединяю данные, исключаю итоговые строки и определяю пиццерии по именам файлов. Исходные наборы не изменяются.</p></article>';
+   await buildCombinedDataset({auto:true});return;
+  }
+  const uploaded=complete.length;
+  const missingHtml=missing.length?missing.map(x=>'<li>'+esc(x)+'</li>').join(""):'<li>Все четыре типа отчётов найдены. Нажмите «Сформировать анализ».</li>';
+  host.innerHTML='<div class="exec-head"><div><span class="eyebrow">ПАНЕЛЬ РУКОВОДИТЕЛЯ</span><h2>Контроль логистики сети</h2><p class="muted">Пока нет готового аналитического набора. Система проверяет загруженные файлы.</p></div><button class="ghost" type="button" data-dashboard-go="data">Открыть данные</button></div>'+
+   '<article class="exec-status"><h3>'+(uploaded?'Данные загружены, но анализ ещё не сформирован':'Начнём с загрузки отчётов')+'</h3><p>В хранилище: <b>'+uploaded+'</b> завершённых наборов. Для анализа нужны четыре вида отчётов с указанием пиццерии в имени файла или строках.</p><div class="exec-checks"><div><b>Нужно для анализа</b><ul>'+missingHtml+'</ul></div><div><b>Что будет рассчитано</b><ul><li>Выручка и валовая прибыль</li><li>Закупки по точкам</li><li>Порча и крупные потери</li><li>Недостачи и излишки отдельно</li><li>Проблемы качества и полноты данных</li></ul></div></div>'+
+   (s.dashboardError?'<p class="error">Последняя попытка: '+esc(s.dashboardError)+'</p>':'')+
+   '<div class="exec-buttons"><button class="primary" type="button" data-dashboard-go="data">Проверить загруженные файлы</button><button class="ghost" type="button" data-dashboard-go="analytics">Перейти к аналитике</button></div></article>'+
+   '<p class="exec-footnote">Товарная ведомость со справочником номенклатуры сама по себе не показывает продажи, закупки, списания и инвентаризационные расхождения. Её можно сохранить как отдельный источник, но для управленческой аналитики нужны операционные отчёты.</p>';
+  host.onclick=e=>{const go=e.target.closest("[data-dashboard-go]");if(go)page(go.dataset.dashboardGo)};
+  return;
+ }
+ let data=s.dashboardCache&&s.dashboardDatasetId===combined.id?s.dashboardCache:null;
+ if(!data){
+  host.innerHTML='<article class="exec-status"><b>Обновляю показатели по последнему набору…</b><p>Читаю сохранённые данные и проверяю качество отчётов.</p></article>';
+  try{
+   const rows=await readAllDatasetRows(combined);
+   const byPoint=new Map(),topSpoil=new Map(),salesPeriods=new Set(),unknownTypes=new Set();
+   let purchases=0,sales=0,grossProfit=0,spoilage=0,shortages=0,surpluses=0;
+   let purchaseRows=0,salesRows=0,spoilRows=0,inventoryRows=0,zeroQtyWithAmount=0,unknownPointRows=0;
+   const pointFor=name=>{if(!byPoint.has(name))byPoint.set(name,{point:name,purchases:0,sales:0,grossProfit:0,spoilage:0,shortages:0,surpluses:0});return byPoint.get(name)};
+   for(const row of rows){
+    const type=String(row["Тип отчёта"]||"");
+    const point=String(row["Подразделение"]||"Не указано");
+    const item=String(row["Наименование"]||"Без названия");
+    const amount=Math.abs(toNumber(row["Показатель для анализа, ₽"]));
+    const signed=toNumber(row["Сумма в отчёте, ₽"]);
+    const qty=toNumber(row["Количество"]);
+    const g=pointFor(point);
+    if(point==="Не указано")unknownPointRows++;
+    if(type==="Закупки"){g.purchases+=amount;purchases+=amount;purchaseRows++}
+    else if(type==="Продажи блюд"){
+     const revenue=toNumber(row["Выручка, ₽"]??signed);
+     const profit=toNumber(row["Валовая прибыль, ₽"]);
+     g.sales+=revenue;g.grossProfit+=profit;sales+=revenue;grossProfit+=profit;salesRows++;
+     const period=String(row["Период отчёта"]||"").trim();if(period&&!period.startsWith("Не подтверждён"))salesPeriods.add(period);
+    }else if(type==="Порча"){
+     g.spoilage+=amount;spoilage+=amount;spoilRows++;
+     if(qty===0&&amount!==0)zeroQtyWithAmount++;
+     const sku=String(row["Артикул"]||"");
+     const key=point+"||"+sku+"||"+item;
+     const v=topSpoil.get(key)||{point,item,sku,unit:String(row["Единица измерения"]||""),quantity:0,amount:0};
+     v.quantity+=Math.abs(qty);v.amount+=amount;topSpoil.set(key,v);
+    }else if(type==="Инвентаризационные расхождения"){
+     inventoryRows++;
+     const op=String(row["Вид операции"]||"");
+     if(op.includes("Недостача")){g.shortages+=Math.abs(signed);shortages+=Math.abs(signed)}
+     if(op.includes("Излишки")){g.surpluses+=Math.abs(signed);surpluses+=Math.abs(signed)}
+    }else unknownTypes.add(type||"Не указан");
+   }
+   const retail=[...byPoint.values()].filter(x=>x.point!=="ПРЦ"&&x.point!=="Не указано");
+   const pizzeriaCount=new Set(retail.map(x=>x.point)).size;
+   const missingPoints=Math.max(0,19-pizzeriaCount);
+   const top=[...topSpoil.values()].sort((a,b)=>b.amount-a.amount).slice(0,5);
+   const branches=[...retail].sort((a,b)=>(b.spoilage+b.shortages)-(a.spoilage+a.shortages)).slice(0,8);
+   const sumRetail=key=>retail.reduce((n,x)=>n+x[key],0);
+   const periodsConfirmed=salesPeriods.size>0;
+   const actions=[];
+   if(top[0]?.amount>50000)actions.push({level:"Высокий",title:"Проверить крупнейшую запись порчи",description:top[0].point+" · "+top[0].item+" · "+rub(top[0].amount)+". В отчёте указано "+top[0].quantity.toLocaleString("ru-RU",{maximumFractionDigits:3})+" "+(top[0].unit||"ед.")+". Сверить документ, период, склад, единицу измерения и фактическое количество."});
+   const outliers=retail.filter(x=>x.shortages>100000||x.surpluses>100000).sort((a,b)=>(b.shortages+b.surpluses)-(a.shortages+a.surpluses)).slice(0,4);
+   outliers.forEach(x=>actions.push({level:"Высокий",title:"Разобрать инвентаризационные расхождения · "+x.point,description:"Недостачи "+rub(x.shortages)+"; излишки "+rub(x.surpluses)+". Проверять отдельно, без взаимозачёта; начать с крупнейших артикулов и складов."}));
+   if(zeroQtyWithAmount>0)actions.push({level:"Средний",title:"Проверить строки порчи с нулевым количеством",description:zeroQtyWithAmount.toLocaleString("ru-RU")+" строк имеют денежную сумму при нулевом количестве. Уточнить правила выгрузки iiko; пока не использовать их для количественных норм."});
+   if(missingPoints>0)actions.push({level:"Средний",title:"Дополнить покрытие сети",description:"В текущем наборе "+pizzeriaCount+" пиццерий из 19. Не хватает отчётов ещё по "+missingPoints+" точкам; их названия нужно подтвердить."});
+   if(!periodsConfirmed||rows.some(r=>["Закупки","Порча","Инвентаризационные расхождения"].includes(r["Тип отчёта"])&&String(r["Период отчёта"]||"").startsWith("Не подтверждён")))actions.push({level:"Средний",title:"Подтвердить периоды отчётов",description:"Продажи: "+([...salesPeriods].join(", ")||"период не указан")+". Периоды закупок, порчи и инвентаризации нужно подтвердить в настройках отчётов iiko, прежде чем сравнивать их напрямую."});
+   if(unknownPointRows>0)actions.push({level:"Высокий",title:"Уточнить привязку строк к пиццериям",description:unknownPointRows.toLocaleString("ru-RU")+" строк не удалось отнести к конкретной точке. Проверьте имена исходных файлов и названия подразделений."});
+   data={rows:rows.length,purchases:sumRetail("purchases"),sales:sumRetail("sales"),grossProfit:sumRetail("grossProfit"),spoilage:sumRetail("spoilage"),shortages:sumRetail("shortages"),surpluses:sumRetail("surpluses"),pizzeriaCount,missingPoints,unknownPointRows,zeroQtyWithAmount,purchaseRows,salesRows,spoilRows,inventoryRows,salesPeriods:[...salesPeriods],top,branches,actions,unknownTypes:[...unknownTypes],sourceName:combined.name,sourceDate:combined.created_at};
+   s.dashboardCache=data;s.dashboardDatasetId=combined.id;s.dashboardActions=actions;
+  }catch(error){
+   host.innerHTML='<article class="exec-status"><b>Не удалось рассчитать показатели</b><p>'+esc(error.message||String(error))+'</p><button class="ghost" type="button" data-dashboard-go="analytics">Открыть аналитику</button></article>';
+   host.onclick=e=>{const go=e.target.closest("[data-dashboard-go]");if(go)page(go.dataset.dashboardGo)};return;
+  }
+ }
+ const latestRaw=raw.reduce((max,x)=>Math.max(max,new Date(x.created_at||0).getTime()),0);
+ const combinedTime=new Date(combined.created_at||0).getTime();
+ const stale=latestRaw>combinedTime;
+ const metric=(label,value,sub)=>'<article class="exec-kpi"><small>'+label+'</small><b>'+value+'</b><span>'+sub+'</span></article>';
+ const actionHtml=data.actions.map((a,i)=>{
+  const exists=s.tasks.some(t=>t.title===a.title&&t.status!=="done");
+  return '<article class="exec-action"><div class="bar"><span class="tag '+(a.level==="Высокий"?"high":"normal")+'">'+a.level+' приоритет</span><small>'+(exists?'Уже в задачах':'Рекомендация системы')+'</small></div><b>'+esc(a.title)+'</b><p>'+esc(a.description)+'</p><button class="ghost" type="button" data-dashboard-action="'+i+'" '+(exists?'disabled':'')+'>'+(exists?'Уже добавлено в задачи':'＋ Создать задачу')+'</button></article>';
+ }).join("")||'<p class="muted">Критических сигналов по заданным правилам не найдено. Это не означает отсутствие рисков: проверьте полноту исходных отчётов.</p>';
+ const branchRows=data.branches.map(x=>'<tr><td><b>'+esc(x.point)+'</b></td><td>'+rub(x.purchases)+'</td><td>'+rub(x.sales)+'</td><td>'+rub(x.spoilage)+'</td><td>'+rub(x.shortages)+'</td><td>'+rub(x.surpluses)+'</td></tr>').join("");
+ const topRows=data.top.map(x=>'<tr><td>'+esc(x.point)+'</td><td>'+esc(x.item)+'</td><td>'+x.quantity.toLocaleString("ru-RU",{maximumFractionDigits:3})+' '+esc(x.unit||"")+'</td><td class="warn-cell">'+rub(x.amount)+'</td></tr>').join("");
+ host.innerHTML=
+  '<div class="exec-head"><div><span class="eyebrow">ПАНЕЛЬ РУКОВОДИТЕЛЯ · ПОСЛЕДНИЙ АНАЛИЗ</span><h2>Контроль логистики сети</h2><p class="muted">Набор: '+esc(data.sourceName)+' · '+data.rows.toLocaleString("ru-RU")+' строк · обновлён '+date(data.sourceDate)+'</p></div><div class="exec-head-actions"><button class="ghost" type="button" data-dashboard-go="analytics">Подробная аналитика</button><button class="ghost" type="button" data-dashboard-go="data">Все данные</button></div></div>'+
+  (stale?'<article class="exec-warning"><b>Появились новые исходные файлы после последнего анализа.</b><p>Показатели ниже относятся к предыдущему аналитическому набору. Пересчитайте, чтобы включить новые загрузки.</p><button class="primary" type="button" data-dashboard-rebuild>Пересчитать анализ</button></article>':'')+
+  '<div class="exec-kpis">'+
+   metric("Выручка пиццерий",rub(data.sales),"Продажи "+(data.salesPeriods.join(", ")||"период не подтверждён"))+
+   metric("Валовая прибыль",rub(data.grossProfit),"По строкам отчёта о продажах")+
+   metric("Закупки пиццерий",rub(data.purchases),data.purchaseRows.toLocaleString("ru-RU")+" строк; период подтвердить")+
+   metric("Порча",rub(data.spoilage),data.spoilRows.toLocaleString("ru-RU")+" строк; предварительная оценка")+
+   metric("Недостачи",rub(data.shortages),"Отдельно от излишков")+
+   metric("Излишки",rub(data.surpluses),"Не считать прибылью")+
+   metric("Покрытие сети",data.pizzeriaCount+" / 19","Не хватает отчётов по "+data.missingPoints+" точкам")+
+   metric("Строк данных",data.rows.toLocaleString("ru-RU"),data.unknownPointRows?data.unknownPointRows.toLocaleString("ru-RU")+" без точки":"Все строки имеют точку")+
+  '</div>'+
+  '<div class="exec-grid">'+
+   '<section class="card exec-panel"><div class="bar"><h3>Что требует внимания</h3><span class="muted">'+data.actions.length+' рекомендаций</span></div><div class="exec-actions">'+actionHtml+'</div></section>'+
+   '<section class="card exec-panel"><h3>Качество и полнота данных</h3><ul class="exec-quality">'+
+    '<li>Продажи: '+(data.salesPeriods.join(", ")||"период не указан")+'</li>'+
+    '<li>Периоды закупок, порчи и инвентаризации требуют подтверждения</li>'+
+    '<li>Строк порчи с нулевым количеством и суммой: '+data.zeroQtyWithAmount.toLocaleString("ru-RU")+'</li>'+
+    '<li>Отчёты по пиццериям: '+data.pizzeriaCount+' из 19; ПРЦ учитывается отдельно</li>'+
+    '<li>Недостачи и излишки не взаимозачитываются</li>'+
+   '</ul><p class="exec-footnote">Рекомендации — сигналы для проверки. Платформа не оформляет и не отправляет заказы поставщикам автоматически.</p></section>'+
+  '</div>'+
+  '<section class="card exec-panel"><div class="bar"><h3>Пиццерии с наибольшими сигналами</h3><button class="link" type="button" data-dashboard-go="analytics">Полная таблица →</button></div><div class="table-scroll"><table class="data-preview"><thead><tr><th>Точка</th><th>Закупки</th><th>Выручка</th><th>Порча</th><th>Недостачи</th><th>Излишки</th></tr></thead><tbody>'+branchRows+'</tbody></table></div></section>'+
+  '<section class="card exec-panel"><h3>Крупнейшие позиции порчи</h3><div class="table-scroll"><table class="data-preview"><thead><tr><th>Точка</th><th>Позиция</th><th>Количество</th><th>Оценка</th></tr></thead><tbody>'+topRows+'</tbody></table></div></section>'+
+  '<p class="exec-footnote">Показатели рассчитаны по сохранённым отчётам. Периоды закупок, порчи и инвентаризации не подтверждены автоматически. Суммы из разных типов отчётов нельзя напрямую сравнивать без проверки периода и методики.</p>';
+ host.onclick=e=>{
+  const go=e.target.closest("[data-dashboard-go]");if(go){page(go.dataset.dashboardGo);return}
+  const action=e.target.closest("[data-dashboard-action]");if(action){createDashboardTask(Number(action.dataset.dashboardAction),action);return}
+  if(e.target.closest("[data-dashboard-rebuild]"))buildCombinedDataset();
+ };
+}
+async function createDashboardTask(index,button){
+ const action=s.dashboardActions[index];if(!action||!s.user)return;
+ const exists=s.tasks.some(t=>t.title===action.title&&t.status!=="done");
+ if(exists){toast("Такая задача уже есть в списке.");return}
+ if(button)button.disabled=true;
+ const payload={workspace_id:s.wid,title:action.title,description:action.description,status:"open",priority:action.level==="Высокий"?"high":"normal",last_comment:"Создано из рекомендаций аналитики. Решение и корректирующее действие подтверждает логист.",created_by:s.user.id,updated_by:s.user.id};
+ const result=await s.db.from("tasks").insert(payload);
+ if(result.error){if(button)button.disabled=false;toast("Не удалось создать задачу: "+result.error.message);return}
+ await log("Создана задача по рекомендации аналитики",action.title);
+ await refresh({skipDashboard:true});
+ await renderExecutiveDashboard();
+ toast("Задача добавлена в общий список");
+}
 function render(){
  const access=$("dataAccessInfo");if(access)access.textContent=s.role==="owner"?"Роль: Владелец. Можно удалять любые завершённые наборы данных в этом рабочем пространстве.":"Роль: Тестировщик. Можно загружать данные, анализировать их и удалять только собственные наборы. Для удаления чужих тестовых файлов владелец пространства должен изменить вашу роль на «Владелец».";
  let n=s.tasks.filter(x=>x.status==="open").length,p=s.tasks.filter(x=>x.status==="progress").length,d=s.tasks.filter(x=>x.status==="done").length;
@@ -305,7 +512,7 @@ function render(){
  $("feedbackList").innerHTML=s.feedback.map(x=>'<article class="item"><b>'+types[x.feedback_type]+'</b><p>'+esc(x.message)+'</p><small>'+esc(x.page_name||"")+' · '+date(x.created_at)+'</small></article>').join("")||'<p class="muted">Отзывов пока нет.</p>';
  $("historyList").innerHTML=s.history.map(historyCard).join("")||'<p class="muted">История пока пуста.</p>';
 }
-async function refresh(){
+async function refresh(options={}){
  $("syncState").textContent="Синхронизация…";
  const q=await Promise.all([
   s.db.from("tasks").select("*").eq("workspace_id",s.wid).order("updated_at",{ascending:false}),
@@ -325,6 +532,7 @@ async function refresh(){
  }
  [s.tasks,s.feedback,s.history]=q.map(x=>x.data||[]);
  render();$("syncState").textContent="Данные синхронизированы";
+ if(!options.skipDashboard)await renderExecutiveDashboard();
 }
 function openTask(id=""){let t=s.tasks.find(x=>x.id===id);$("taskForm").reset();$("taskId").value=t?.id||"";$("dialogTitle").textContent=t?"Изменить задачу":"Новая задача";$("taskTitle").value=t?.title||"";$("taskDescription").value=t?.description||"";$("taskStatus").value=t?.status||"open";$("taskPriority").value=t?.priority||"normal";$("taskComment").value=t?.last_comment||"";$("taskError").textContent="";$("taskDialog").showModal()}async function saveTask(e){e.preventDefault();let id=$("taskId").value,p={workspace_id:s.wid,title:$("taskTitle").value.trim(),description:$("taskDescription").value.trim(),status:$("taskStatus").value,priority:$("taskPriority").value,last_comment:$("taskComment").value.trim(),updated_by:s.user.id};let r=id?await s.db.from("tasks").update(p).eq("id",id).eq("workspace_id",s.wid):await s.db.from("tasks").insert({...p,created_by:s.user.id});if(r.error){$("taskError").textContent=r.error.message;return}await log(id?"Задача изменена":"Создана задача",p.title+(p.last_comment?" — "+p.last_comment:""));$("taskDialog").close();await refresh();toast("Задача сохранена")}async function deleteTask(id){if(!confirm("Удалить задачу?"))return;let r=await s.db.from("tasks").delete().eq("id",id).eq("workspace_id",s.wid);if(r.error){toast(r.error.message);return}await log("Задача удалена",id);await refresh()}async function upload(e){
  e.preventDefault();
